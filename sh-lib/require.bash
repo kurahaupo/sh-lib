@@ -9,17 +9,18 @@ case $- in
 esac
 
 function _provides {
-    eval __LOADED__$1=true \
-         __LOADED_FILE__$1=\"\$__LOADING_FILE__\"
+    case ";$__LOADED_FUNCS__<" in
+    (*";$1<$__LOADING_FILE__"*) ;;
+    (*) __LOADED_FUNCS__="$1<$__LOADING_FILE__${__LOADED_FUNCS__:+;$__LOADED_FUNCS__}" ;;
+    esac
 }
 _provides _provides
 
 function _is_loaded {
-    case "$1" in
-    (*[!a-zA-Z0-9_]*) return 64 ;;
+    case ";$__LOADED_FUNCS__<" in
+    (*";$1<"*) true ;;
+    (*) false ;;
     esac
-    #eval "\${__LOADED__$1:+:}" false
-    eval "\${__LOADED__$1:-false}"
 }
 _provides _is_loaded
 
