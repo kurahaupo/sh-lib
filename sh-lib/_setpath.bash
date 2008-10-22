@@ -36,7 +36,18 @@ function _setpath {
             (-c | --clear) clear=true reset_xp=true ; continue ;;
             (-d | --delete) mode=delete reset_xp=true ; continue ;;
             (-h | --help)
-                echo "Usage: $FUNCNAME [--verbose] {variable-name} [--append|--prefix|--delete|--clear] {path}..."
+                cat <<EOM
+Usage: $FUNCNAME [options...] {variable-name} [[--append|--prefix|--delete|--clear] path]...
+Options include:
+   --allow-dot, --no-dot, --force-dot           Convert "" to . or vice-versa
+   --if-exists, --if-dir, --if-file, --always   Test path before adding it?
+   --move, --move-if-rel, --move-if-abs         What if a path is already there
+   --part-separator=":", --part-prefix="", --part-suffix=""
+        The defaults are useful for PATH, LD_LIBRARY_PATH and many others, but
+        it can also be used for CCFLAGS with separator=" ", prefix="-I"
+   --verbose                                    Print final result
+   --help                                       This message
+EOM
                 return 0
                 ;;
             (-p | --prefix) mode=begin reset_xp=true ; continue ;;
