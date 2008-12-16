@@ -6,7 +6,7 @@ function die {
              EX_NOEXEC=127
     let _e=$1
     shift
-    echo >&2 "$@"
+    (($#)) && echo >&2 "$@"
     exit $_e
 }
 _provides die
