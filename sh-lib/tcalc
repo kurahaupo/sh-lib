@@ -1,0 +1,36 @@
+
+function _tscale {
+    local p=$1
+    p=${p/:/h}
+    p=${p/:/m}
+    [[ "$p" =~ ^[0-9smhdw]*$ ]] || { echo "$p" ; return ; }
+    local s=1 m=60 h=3600 d=86400 w=604800 r=0 p x z l
+    [[ $p =~ [smhdw]$ ]] || p="$p${2:-s}"
+    while [[ -n $p ]]
+    do  x=${p%%[smhdw]*}
+        z=${p: ${#x} :1}
+        p=${p: ${#x}+1}
+        (( r += x * z ))
+    done
+    echo $r
+}
+
+function _tnorm {
+    local p=$1
+    [[ $p =~ ^[0-9]+$ ]] || { echo "$p" ; return ; }
+    local s= m= h= d= w= r=
+    (( w = p / 604800 ))    && r=${r}${w}w
+    (( d = p / 86400 % 7 )) && r=${r}${d}d
+    (( h = p / 3600 % 24 )) && r=${r}${h}h
+    (( m = p / 60 % 60 ))   && r=${r}${m}m
+    (( s = p % 60 ))        && r=${r}${s}s
+    echo ${r:-${2:-0}}
+}
+
+function tcalc {
+    local -a A
+    for x in "$@"; do A+=( "$(_tscale "$x")" ) ; done
+
+    eval _tnorm '$(('"${A[@]}"'))'
+}
+_provides tcalc
