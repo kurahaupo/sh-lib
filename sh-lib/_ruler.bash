@@ -5,8 +5,8 @@ function _ruler {
     do  let "w&1" && R="$R$T"
         T="$T$T"
     done
-    let $# && case $1 in -c|--clear) echo -e "c\c" ;; *) echo >&2 "Invalid option $1" ; return 1 ;; esac
-    echo "[7m$R[m"
+    let $# && case $1 in -c|--clear) echo -n $'\ec' ;; *) echo >&2 "Invalid option $1" ; return 1 ;; esac
+    echo $'\e[7m'"$R"$'\e[m'
 }
 _provides _ruler
 
