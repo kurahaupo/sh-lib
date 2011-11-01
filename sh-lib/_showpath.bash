@@ -10,5 +10,6 @@ function _showpath {
         esac
         echo "    $_p"
     done
+    [[ "$_path" = *?: ]] && echo "    ."
 }
 _provides _showpath
