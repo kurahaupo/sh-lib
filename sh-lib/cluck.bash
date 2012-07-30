@@ -60,7 +60,7 @@ DEBUG CLUCK
     exitcode=$_exitcode
     FUNCNAME=${#FUNCNAME[*]}:(${FUNCNAME[*]})
     BASH_SOURCE=${#BASH_SOURCE[*]}:(${BASH_SOURCE[*]})
-    BASH_LINENO=${#BASH_LINENO[*]}:(${BASH_LINENO[*]}) LINENO=$LINENO
+    LINENO+BASH_LINENO=$((1+${#BASH_LINENO[*]})):($LINENO ${BASH_LINENO[*]})
 "
 
     if $_backtrace
@@ -69,7 +69,7 @@ DEBUG CLUCK
         (( _depth_limit > _hide_depth )) || { ((_depth_limit=_hide_depth+1)) ; $_debug && echo "DEBUG Increase limit to $_depth_limit" ; }
         for (( _i=$_hide_depth ; _i<_depth_limit ; _i++ ))
         do
-            $_debug && echo "DEBUG showing level $_i"
+            $_debug && echo "DEBUG showing level $_i [$( caller $((_i-1)) )]"
             _source=${BASH_SOURCE[_i]}
             ((_i>0)) && _lineno=${BASH_LINENO[_i-1]}
             ((_lineno)) || _lineno=
