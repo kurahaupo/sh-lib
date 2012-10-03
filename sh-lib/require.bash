@@ -104,16 +104,20 @@ function require {
 }
 _provides require
 
-case $1 in
-(--all)
+if [[ -n "$*" ]]
+then
     require autoload
-    autoload $(
-                shopt -s nullglob   # remove any wildcards that match nothing
-                for _d in $( IFS=: ; echo $FPATH )
-                do echo $_d/*.bash
-                done
-            )
-    ;;
-esac
+    if [[ "$*" = --all ]]
+    then
+        for _p in $HOME/.sh-lib/* ; do
+            _f=${_p##*/} _f=${_f%.bash} _f=${_f%.sh}
+            autoload $_f --
+        done
+    else
+        for _f do
+            autoload $_f --
+        done
+    fi
+fi
 
 unset __LOADING_FILE__
