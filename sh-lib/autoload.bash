@@ -1,3 +1,5 @@
+: ${FPATH="/usr/lib/sh-lib:/usr/local/lib/sh-lib:$HOME/.sh-lib"}
+
 function autoload {
     local _p _f _h
     for _p
