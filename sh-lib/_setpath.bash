@@ -150,6 +150,7 @@ EOM
                 $realpath && {
                     require _realpath
                     dir=$( _realpath $dir )
+                    xdir="$prefix$dir$suffix"
                 }
                 ;;
             esac
