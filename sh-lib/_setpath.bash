@@ -4,14 +4,17 @@ function _setpath {
             if_dir=false if_file=false if_exist=false xp_before='' xp_after='' \
             reset_xp=false xpart='' use_hosttype=false move=all allowdot=false \
             forcedot=false quotenext=false quoteall=false
-    for arg in "$@"
+    while (($#))
     do
+        arg="$1"
+        shift
         if ${quoteall} || ${quotenext}
         then
             quotenext=false
         else
             case $arg in
-            (-- | --quote-all) quoteall=true ; continue ;;
+            (--) quoteall=true ; continue ;;
+            (-[a-zA-Z]?*) set -- "${arg:0:2}" "-${arg:2}" "$@" ; continue ;;
             (--always) if_dir=false if_file=false if_exist=false ; continue ;;
             (--colon) sep=':' ; continue ;;
             (--dont-move) move=none ; continue ;;
