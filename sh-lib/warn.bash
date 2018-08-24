@@ -1,5 +1,5 @@
 require cluck
 function warn {
-    cluck -w "$@"
+    cluck -wh "$@"
 }
 _provides warn
