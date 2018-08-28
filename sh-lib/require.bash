@@ -1,66 +1,79 @@
 __LOADING_FILE__=$HOME/.sh-lib/require.bash
 
 : ${FPATH="/usr/lib/sh-lib:/usr/local/lib/sh-lib:$HOME/.sh-lib"}
-: ${__REQUIRE_FAILURE_VERBOSE__=true}
 
-case $- in
-(*i*) : ${__REQUIRE_FAILURE_FATAL__=false} ;;
-(*)   : ${__REQUIRE_FAILURE_FATAL__=true}  ;;
-esac
+# Never abort an interactive shell because of failure, but always give diagnostics
+[[ $- = *i* ]] && __REQUIRE_FAILURE_ISFATAL__=false __REQUIRE_FAILURE_VERBOSE__=true
 
-function _provides {
-    case ";$__LOADED_FUNCS__<" in
-    (*";$1<$__LOADING_FILE__"*) ;;
-    (*) __LOADED_FUNCS__="$1<$__LOADING_FILE__${__LOADED_FUNCS__:+;$__LOADED_FUNCS__}" ;;
-    esac
+function _require_warning {
+    "${__REQUIRE_FAILURE_VERBOSE__:-true}" && printf >&2 '# %s\n' "$*"
 }
-_provides _provides
-
-function _is_loaded {
-    case ";$__LOADED_FUNCS__<" in
-    (*";$1<"*) true ;;
-    (*) false ;;
-    esac
-}
-_provides _is_loaded
 
 function _require_failed {
-    "${__REQUIRE_FAILURE_VERBOSE__:-true}" && echo >&2 "# $@"
-    "${__REQUIRE_FAILURE_FATAL__:-false}"  && exit 63
+    _require_warning "$@"
+    "${__REQUIRE_FAILURE_ISFATAL__:-true}" && exit 63
 }
-_provides _require_failed
+
+function _provides {
+    local _r
+    __LOADED_FUNCS__="${__LOADED_FUNCS__%\;};"
+    for _r do
+        case "$__LOADED_FUNCS__" in
+        (*";$_r<$__LOADING_FILE__;"*) ;;
+        (*) __LOADED_FUNCS__+="$_r<$__LOADING_FILE__;" ;;
+        esac
+    done
+}
+
+function _is_loaded {
+    __LOADED_FUNCS__="${__LOADED_FUNCS__%\;};"
+    [[ "$__LOADED_FUNCS__" = *";$1<"* ]]
+}
+
+function _unload_function {
+    local _r=$1
+    __LOADED_FUNCS__="${__LOADED_FUNCS__%\;};"
+    unalias 2>/dev/null "$_r"
+    unset -f "$_r"
+    _is_loaded "$_r" &&
+        __LOADED_FUNCS__="${__LOADED_FUNCS__%%";$_r<"*};${__LOADED_FUNCS__#*";$_r<"*";"}"
+}
 
 function _load_file {
     local _f="$1" _r="$2" ; shift ; shift
     local __LOADING_FILE__=$_f
-    $_verbose && echo >&2 -e "loading '$_r' ... \c"
-    . "$_f" "$@" &&
-    _is_loaded "$_r" || {
-        #_require_failed "$_r is not provided by $_f"
-        "${__REQUIRE_FAILURE_VERBOSE__:-true}" && echo >&2 "# $_r is not provided by $_f"
-        return 70
+    ((!_verbose)) || printf >&2 -e "# loading '%s' ... " "$_r"
+    unalias 2>/dev/null "$_r"
+    . "$_f" "$@" || {
+        _require_failed ". $_f returned status $? while trying to load $_r"
+        return 66  # EX_NOINPUT
     }
-    _provides "$_r"
-    $_verbose && echo >&2 "loaded '$_r'"
+    _is_loaded "$_r" || {
+        _require_failed "$_r is not provided by $_f"
+        return 63
+    }
+    #_provides "$_r"
+    ((!_verbose)) || printf >&2 '# loaded "%s"\n' "$_r"
     return 0
 }
-_provides _load_file
 
 function require {
+    local true=1 false=0
     local _dont_reload=true
     local _verbose=false
     local _load_from_path
     while
         case $1 in
         (--) shift ; false ;;
-        (--help) echo "require [--force-reload] {function-name}" ; return 0 ;;
+        (--help) printf 'require [--verbose|--quiet] [--reload] [--path=FILEPATH] {function-name}\n' ; return 0 ;;
         (-p | --path) _load_from_path="$2" ; shift ;;
         (--path=*) _load_from_path="${1#--*=}" ;;
         (-f | --force-reload \
         |-r | --reload) _dont_reload=false ;;
         (--dont-reload) _dont_reload=true ;;
         (-v | --verbose) _verbose=true ;;
-        (-*) echo >&2 "$FUNCNAME: invalid option '$1'; try '$FUNCNAME --help'" ; return 64 ;;
+        (-q | --quiet)   _verbose=false ;;
+        (-*) _require_failed "require[function]: invalid option '$1'" ; return 64 ;;
         (*)  false ;;
         esac
     do
@@ -70,39 +83,44 @@ function require {
     local _r="$1"
     shift
 
-    if $_dont_reload && _is_loaded "$_r"
+    if _is_loaded "$_r" && ((_dont_reload))
     then
-        $_verbose && echo >&2 "'$_r' is already loaded"
+        ((!_verbose)) || printf >&2 '# "%s" is already loaded\n' "$_r"
         return 0
     fi
 
-    if test -n "$_load_from_path"
+    _unload_function "$_r"
+
+    if [[ -n "$_load_from_path" ]]
     then
-        "${_verbose:-false}" && echo >&2 "# trying to load $_r from $_load_from_path"
+        ((!_verbose)) || printf >&2 '# trying to load "%s" from "%s"\n' "$_r" "$_load_from_path"
         _load_file "$_load_from_path" "$_r" "$@"
-        return $?
-    fi
+    else
 
-    local _d _f _s
-    for _s in .bash .sh ""
-    do
-        for _d in $( IFS=: ; echo $FPATH )
+        local _d _f _s
+        local -a _dd
+        mapfile -t _dd < <( IFS=: ; printf '%s\n' $FPATH )
+
+        for _s in .bash .sh ""
         do
-            : ${_d:=.}
-            _f="$_d/$_r$_s"
-            ${_verbose:-false} && echo >&2 "# trying to load $_r from $_f"
-            if test -f "$_f" -a -r "$_f"
-            then
-                _load_file "$_f" "$_r" "$@"
-                return $?
-            fi
+            for _d in "${_dd[@]}"
+            do
+                _f="${_d:-.}/$_r$_s"
+                ((!_verbose)) || printf >&2 '# trying to load "%s" from "%s"\n' "$_r" "$_f"
+                if [[ -f "$_f" && -r "$_f" ]]
+                then
+                    _load_file "$_f" "$_r" "$@"
+                    return $?
+                fi
+            done
         done
-    done
 
-    _require_failed "# '$_r' cannot be loaded"
-    return 63
+        _require_failed "# '$_r' cannot be loaded"
+        return 63
+    fi
 }
-_provides require
+
+_provides _is_loaded _load_file _provides _require_failed _unload_function require
 
 if [[ -n "$*" ]]
 then
@@ -110,7 +128,7 @@ then
     if [[ "$*" = --all ]]
     then
         for _p in $HOME/.sh-lib/* ; do
-            _f=${_p##*/} _f=${_f%.bash} _f=${_f%.sh}
+            _f=${_p##*/} _f=${_f%.*sh}
             autoload $_f --
         done
     else
