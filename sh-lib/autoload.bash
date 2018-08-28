@@ -1,22 +1,20 @@
-: ${FPATH="/usr/lib/sh-lib:/usr/local/lib/sh-lib:$HOME/.sh-lib"}
-
 function autoload {
-    local _p _f _h
-    for _p
-    do
-        _f=${_p##*/}
-        _f=${_f%.*sh}
+    local _p _r _h
+    for _p do
+        _r=${_p##*/}
+        _r=${_r%.*sh}
         _h=
-        case $_f in
-        (autoload|*~|.*.sw?) continue ;;
-        (carp|cluck|croak|confess) _h=-h ;;
+        _is_loaded "$_r" && continue
+        case $_r in
+        (autoload|--|.*|*~|*[!0-9a-zA-Z_.:-]*) continue ;;
+        (carp|cluck|croak|confess) _h=' -h' ;;
         esac
-        _is_loaded "$_f" ||
+        unalias 2>/dev/null "$_r"
         eval "
-            function $_f {
-                #require -p $_p $_f &&
-                require $_f &&
-                $_f $_h \"\$@\"
+            function $_r {
+                #require -p $_p $_r &&
+                require $_r &&
+                $_r$_h \"\$@\"
             }
         "
     done
