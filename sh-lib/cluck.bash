@@ -1,4 +1,3 @@
-require die
 function cluck {
     local _o= _i=
     local _backtrace=true _only1=false _hide_depth=1 _depth_limit=${#BASH_LINENO[@]}+1 _debug=false
@@ -88,6 +87,9 @@ DEBUG CLUCK
     else
         echo >&2 "$_message"
     fi
-    ${_exitcode:+:} false && die $_exitcode
+    ${_exitcode:+:} false && {
+        require die
+        die $_exitcode
+    }
 }
 _provides cluck
