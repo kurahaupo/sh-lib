@@ -1,45 +1,26 @@
 function _setpath {
-    local   pathvar='' path='' mode=end clear=false arg='' dir='' xdir='' \
-            sep=: prefix='' suffix='' realpath=false verbose=false \
-            if_dir=false if_file=false if_exist=false xp_before='' xp_after='' \
-            reset_xp=false xpart='' use_hosttype=false move=all allowdot=false \
-            forcedot=false quotenext=false quoteall=false
-    while (($#))
-    do
-        arg="$1"
-        shift
-        if ${quoteall} || ${quotenext}
-        then
-            quotenext=false
-        else
-            case $arg in
-            (--) quoteall=true ; continue ;;
-            (-[a-zA-Z]?*) set -- "${arg:0:2}" "-${arg:2}" "$@" ; continue ;;
-            (--always) if_dir=false if_file=false if_exist=false ; continue ;;
-            (--colon) sep=':' ; continue ;;
-            (--dont-move) move=none ; continue ;;
-            (--dont-use-hosttype) use_hosttype=false reset_xp=false ; continue ;;
-            (--dot=allow | --allow-dot) allowdot=true forcedot=false ; continue ;;
-            (--dot=force | --force-dot) allowdot=true forcedot=true ; continue ;;
-            (--dot=no | --no-dot) allowdot=false forcedot=false ; continue ;;
-            (--if-dir) if_dir=true ; continue ;;
-            (--if-exists) if_exist=true ; continue ;;
-            (--if-file) if_file=true ; continue ;;
-            (--move) move=all ; continue ;;
-            (--move-if-abs) move=abs ; continue ;;
-            (--move-if-rel) move=rel ; continue ;;
-            (--part-prefix=*) prefix=${arg#-*=} ; continue ;;
-            (--part-separator=*) sep=${arg#-*=} ; continue ;;
-            (--part-suffix=*) suffix=${arg#-*=} ; continue ;;
-            (--real-path) realpath=true ; continue ;;
-            (--space) sep=' ' ; continue ;;
-            (--use-hosttype) use_hosttype=true reset_xp=true ; continue ;;
-            (-[A-Z]) sep=' ' prefix=$arg ; continue ;;
-            (-a | --append) mode=end reset_xp=true ; continue ;;
-            (-c | --clear) clear=true reset_xp=true ; continue ;;
-            (-d | --delete) mode=delete reset_xp=true ; continue ;;
-            (-h | --help)
-                cat <<EOM
+    [[ -n ${true+_}  ]] || local -ri true=1  || { return ; echo >&2 ERROR cannot set true=1 in _setpath ; }
+    [[ -n ${false+_} ]] || local -ri false=0 || { return ; echo >&2 ERROR cannot set false=0 in _setpath ; }
+    (( true == 1 && false == 0 )) || { echo >&2 ERROR: true=$true false=$false ; return ; }
+    local -ri FORCE=1 ALLOW=0 NEVER=-1
+    local -r PERMIT=ALLOW NEED=FORCE REQUIRE=FORCE PROHIBIT=NEVER NO=NEVER DONT=NEVER
+    local   pathvar= mode=end clear=false arg= orig_arg= elem= xdir= \
+            sep=: prefix= suffix= realpath=false verbose=false \
+            if_exist=false if_dir=false if_file=false if_link=false \
+            if_notlink=false xpart pi \
+            use_hosttype=false move=all xrel= dot=ALLOW \
+            quotenext=false quoteall=false
+    local -a path=() xparts=()
+    local -A separators=(
+        [colon]=':'
+        [comma]=','
+        [semicolon]=';'
+        [space]=' '
+    )
+
+    if [[ $* = "-h" || "--help" = "$*"* && $* = "--h"* ]]
+    then
+        cat <<EOM
 Usage: $FUNCNAME [options...] {variable-name} [[--append|--prefix|--delete|--clear] path]...
 Options include:
    --allow-dot, --no-dot, --force-dot           Convert "" to . or vice-versa
@@ -47,153 +28,197 @@ Options include:
    --move, --move-if-rel, --move-if-abs         What if a path is already there
    --part-separator=":", --part-prefix="", --part-suffix=""
         The defaults are useful for PATH, LD_LIBRARY_PATH and many others, but
-        it can also be used for CCFLAGS with separator=" ", prefix="-I"
+        it can also be used to set directories in CCFLAGS by using --space -I
    --verbose                                    Print final result
    --help                                       This message
 EOM
-                return 0
-                ;;
-            (-p | --prefix) mode=begin reset_xp=true ; continue ;;
-            (-q | --quote-next) quotenext=true ; continue ;;
-            (-v | --verbose) verbose=true ; continue ;;
+        return 0
+    fi
+
+    orig_arg=$1
+    while (($#))
+    do
+        arg="$1"
+        shift
+
+        (( quoteall || quotenext)) || {
+            case $arg in
+            (-- | --quote-all)          quoteall=true ;;
+            (- | -q | --quote-next)     quotenext=true ;;
+            (--always)                  if_dir=false if_file=false if_link=false if_notlink=false if_exist=false ;;
+            (--dot=@(ALLOW|FORCE|NEVER)) dot=${arg#*=} ;;
+            (--if-dir | -d)             if_dir=true ;;
+            (--if-exists | -e)          if_exist=true ;;
+            (--if-file | -f)            if_file=true ;;
+            (--if-link | -l)            if_link=true if_notlink=false ;;
+            (--if-not-link | -h)        if_notlink=true if_link=false ;;
+            (--move|--move=FORCE)       move=all ;;
+            (--move-if-@(abs|rel))      move=${arg##*[=-]} ;;
+            (--move=NEVER)              move=none ;;
+            (--prefix=*)                prefix=${arg#-*=} ;;
+            (--real-path)               realpath=true ;;
+            (--separator=*)             if [[ -n ${separators[${arg#-*=}]+_} ]]
+                                        then printf -v sep %s "${separators[${arg#-*=}]}"
+                                        else printf -v sep %b "${arg#-*=}"
+                                        fi
+                                        (( ${#sep} == 1 )) || {
+                                            echo "# $FUNCNAME: Invalid separator '$sep' (not a single character)"
+                                            return 1
+                                        }
+                                        ;;
+            (--suffix=*)                suffix=${arg#-*=} ;;
+            (--use-hosttype)            use_hosttype=true xparts=() ;;
+            (--use-hosttype=NEVER)      use_hosttype=fa xparts=() ;;
+            (-[A-Z])                    sep=' ' prefix=$arg ;;
+
+            (--space)                   sep=' ' ;;
+            (--semicolon)               sep=';' ;;
+            (--colon)                   sep=':' ;;
+            (--comma)                   sep=',' ;;
+            (-[#%^+:,/\;])              sep=${arg:1} ;;
+
+            (-a | --append)             mode=end xparts=() ;;
+            (-c | --clear)              clear=true xparts=() ;;
+            (-k | --delete)             mode=delete xparts=() ;;
+            (-p | --prefix)             mode=begin xparts=() ;;
+            (-v | --verbose)            verbose=true ;;
+
+            ( --@(allow|always|do|dont|force|need|never|no|not|permit|prohibit|require)-* )
+                                        pi=${arg#--*-}
+                                        set -- "--$pi=${arg:2:-1-${#pi}}" "$@"
+                                        continue ;;
+
+            ( --*=@(allow|permit)                 )  set -- "${arg%%=*}=ALLOW" "$@" ; continue ;;
+            ( --*=@(force|do|need|always|require) )  set -- "${arg%%=*}=FORCE" "$@" ; continue ;;
+            ( --*=@(never|no|dont|not|prohibit)   )  set -- "${arg%%=*}=NEVER" "$@" ; continue ;;
+
+            ( --*=FORCE )  set "${arg%%=*}" "$@" ; continue ;;
+
+            (-[^-][^-]*)                set -- "${arg:0:2}" "-${arg:2}" "$@" ;;
+
             (-*)
                 echo "# $FUNCNAME: Invalid option '$arg'; try '$FUNCNAME --help'" 1>&2
                 return 1
                 ;;
-            esac
-        fi
-        case $pathvar in
-        ('')
-            pathvar=$arg
-            continue
-            ;;
-        esac
-        case $arg in
-        (.)
-            $forcedot || $allowdot || arg=
-            ;;
-        ('')
-            $forcedot && $allowdot && arg=.
-            ;;
-        esac
-        if $reset_xp
+            (*) false ;;
+            esac && {
+                orig_arg=$2
+                continue
+            }
+        }
+
+        quotenext=false
+        if [[ -z $pathvar ]]
         then
-            reset_xp=false
-            xp_before='' xp_after=''
-            $use_hosttype && xp_before=" $HOSTTYPE$xp_before"
-            case $mode:$xp_before in
-            (begin:?*)
-                xp_before=" $xp_before"
-                while test -n "$xp_before"
-                do
-                    xpart=${xp_before##*\ }
-                    xp_before=${xp_before%\ *}
-                    xp_after="$xpart $xp_after"
-                done
-                xp_before=''
-                ;;
-            esac
+            pathvar=$arg
+            # First time: initialize path from ${!pathvar}
+            IFS="$sep" read -r -a path <<<"${!pathvar}$sep" || path=()
+            continue
         fi
-        for xpart in $xp_before '' $xp_after
-        do
-            dir=$arg${arg:+${xpart:+/}}$xpart
-            case $path in
-            ('')
-                eval path=\"\${$pathvar+\${sep}\${$pathvar:-.}}\${sep}\"
-                case $path in
-                (*$sep.$sep*)
-                    $allowdot || path="${path%%$sep.$sep*}$sep$sep${path#*$sep.$sep}"
-                    ;;
-                esac
-                ;;
-            esac
-            xdir="$prefix$dir$suffix"
-            case $path in
-            (*$sep$xdir$sep*)
-                case $mode in
-                (delete)
-                    path="${path%%$sep$xdir$sep*}$sep${path#*$sep$xdir$sep}"
-                    continue
-                    ;;
-                esac
-                case $move:$dir in
-                (all:*)  ;;
-                (rel:/*) continue ;;
-                (rel:*)  ;;
-                (abs:/*) ;;
-                (abs:*)  continue ;;
-                (none:*) continue ;;
-                esac
-                path="${path%%$sep$xdir$sep*}$sep${path#*$sep$xdir$sep}"
-                ;;
-            esac
-            case $dir in
-            (/*)
-                if $if_dir && $if_file
-                then
-                    test ! -d "$dir" -a ! -f "$dir"
-                else
-                    if $if_dir
-                    then
-                        test ! -d "$dir"
-                    else
-                        if $if_file
-                        then
-                            test ! -f "$dir"
-                        else
-                            if $if_exist
-                            then
-                                test ! -e "$dir"
-                            else
-                                false
-                            fi
-                        fi
-                    fi
-                fi && continue
-                $realpath && {
-                    require _realpath
-                    dir=$( _realpath $dir )
-                    xdir="$prefix$dir$suffix"
-                }
-                ;;
-            esac
-            if $clear
+
+        case $arg in
+        (.)  (( dot == PROHIBIT )) && arg= ;;
+        ('') (( dot == FORCE    )) && arg=.  ;;
+        esac
+
+        if (( ${#xparts[@]} == 0 ))
+        then
+            # Initialize xparts array
+            # Assemble list of trial suffices, in the order they should appear
+            # in the path.
+            if (( use_hosttype ))
             then
-                path="$sep"
+                # For Intel host types, just append "32" or "64" to the
+                # prospective directory name; for everyone else, just use the
+                # $HOSTTYPE (for now).
+                case $HOSTTYPE in
+              # (i*86)          xparts+=( $(( 32 << ( ${HOSTTYPE:0-3} > 600 ) )) ) ;;
+                (i[3-5]86|ia32) xparts+=( 32 ) ;;
+                (i686*)         xparts+=( 64 ) ;;
+                (x86_+([0-9]))  xparts+=( "${HOSTTYPE#*_}" ) ;;
+                (*)             xparts+=( "$HOSTTYPE" ) ;;
+                esac
+            fi
+
+            # Always need an empty suffix as a last resort.
+            xparts+=('')
+
+            # If moving to beginning of path, reverse the list so they still
+            # wind up in the path in the right order.
+            if [[ $mode = begin ]]; then
+                local -i _n _m=${#xparts[@]}-1
+                for (( _n=0 ; _n<_m-_n ; ++_n )) do
+                    _t=${xparts[_n]}
+                    xparts[_n]=${xparts[_m-_n]}
+                    xparts[_m-_n]=$_t
+                done
+            fi
+        fi
+
+        for xpart in "${xparts[@]}"
+        do
+            elem=$arg$xpart
+            if [[ $elem = /* ]]
+            then xrel=abs
+            else xrel=rel
+            fi
+            # Resolve symlinks, if requested
+            if (( realpath ))
+            then
+                require _realpath
+                elem=$( _realpath $elem )
+            fi
+            xdir="$prefix$elem$suffix"
+            if (( ${#path[@]} )) && for pi in "${!path[@]}" ; do [[ "${path[$pi]}" = "$xdir" ]] && break ; done
+            then
+                [[ $mode = delete || ( $move = all || $move = $xrel ) ]] || continue
+                unset "path[$pi]"
+            fi
+            if [[ $xrel = abs ]]
+            then
+                if (( if_notlink ))
+                then
+                    [[ ! -h "$elem" ]]
+                fi &&
+                if (( if_exist ))
+                then
+                    [[ -e "$elem" ]]
+                elif (( if_dir || if_file || if_link ))
+                then
+                    { (( if_dir   )) && [[ -d "$elem" ]] ; } ||
+                    { (( if_file  )) && [[ -f "$elem" ]] ; } ||
+                    { (( if_link  )) && [[ -h "$elem" ]] ; }
+                fi ||
+                continue
+            fi
+
+            if ((clear))
+            then
+                path=()
                 clear=false
             fi
+
             case $mode in
             (begin)
-                path="$sep$xdir$path"
+                path=( "$xdir" "${path[@]}" )
                 ;;
             (delete)
                 ;;
             (*)
-                path="$path$xdir$sep"
+                path=( "${path[@]}" "$xdir" )
                 ;;
             esac
         done
+        orig_arg=$1
     done
-    case $path in
-    ('')
-        $clear || {
-            eval path=\"\${$pathvar+\${sep}\${$pathvar:-.}}\${sep}\"
-            case $path in
-            (*$sep.$sep*)
-                $allowdot || path="${path%%$sep.$sep*}$sep$sep${path#*$sep.$sep}"
-                ;;
-            esac
-        }
-        ;;
-    esac
-    path="${path#$sep}"
-    path="${path%$sep}"
-    eval $pathvar=\"\$path\"
-    export $pathvar
-    $verbose && {
+    printf -v "$pathvar" "%s$sep" "${path[@]}"
+    printf -v "$pathvar" "%s" "${!pathvar%"$sep"}"
+    (( verbose )) && {
         require _showpath
         _showpath $pathvar 1>&2
-        #echo "# $FUNCNAME $pathvar $path"
     }
 }
 _provides _setpath
+
+p()  { _setpath --colon PATH -v ; }
+sp() { _setpath --colon PATH "$@" ; }
