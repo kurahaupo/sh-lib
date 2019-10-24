@@ -1,113 +1,127 @@
 #!/module/for/bash
 
-declare -Air EX_values=(
+################################################################################
 
-    # POSIX/C stdlib.h
+(( ${#EX_names[@]} == 0 )) && {
+    declare -a EX_names=(
 
-    [SUCCESS]=0      # Successful exit status.
-    [FAILURE]=1      # Failing exit status.
+        # POSIX/C stdlib.h
 
-    # BSD's sysexits.h
+        [0]=SUCCESS         # Successful exit status.
+        [1]=FAILURE         # Failing exit status.
 
-    [OK]=0             # successful termination
-    [_BASE]=64         # base value for error messages
-    [USAGE]=64         # command line usage error
-    [DATAERR]=65       # data format error
-    [NOINPUT]=66       # cannot open input
-    [NOUSER]=67        # addressee unknown
-    [NOHOST]=68        # host name unknown
-    [UNAVAILABLE]=69   # service unavailable
-    [SOFTWARE]=70      # internal software error
-    [OSERR]=71         # system error (e.g., can't fork)
-    [OSFILE]=72        # critical OS file missing
-    [CANTCREAT]=73     # can't create (user) output file
-    [IOERR]=74         # input/output error
-    [TEMPFAIL]=75      # temp failure; user is invited to retry
-    [PROTOCOL]=76      # remote error in protocol
-    [NOPERM]=77        # permission denied
-    [CONFIG]=78        # configuration error
-    [_MAX]=78          # maximum listed value
+        # GNU libc
 
-    # Local
+        [127]=NOEXEC        # from system(), and thus used by shell, sudo, etc
 
-    [FAIL]=1           # like EXIT_FAILURE but in sysexits' style
-    [BUG]=96           # local
-    [BROKEN]=255       # local
-    #[STATUS]=$?        # local - NOTE: can't be defined here, must be defined immediately after the relevant command
+        # BSD sysexits.h
 
-    # Shell
+        [0]=OK             # successful termination
+    #   [64]=_BASE         # base value for error messages
+        [64]=USAGE         # command line usage error
+        [65]=DATAERR       # data format error
+        [66]=NOINPUT       # cannot open input
+        [67]=NOUSER        # addressee unknown
+        [68]=NOHOST        # host name unknown
+        [69]=UNAVAILABLE   # service unavailable
+        [70]=SOFTWARE      # internal software error
+        [71]=OSERR         # system error (e.g., cannot fork)
+        [72]=OSFILE        # critical OS file missing
+        [73]=CANTCREAT     # cannot create (user) output file
+        [74]=IOERR         # input/output error
+        [75]=TEMPFAIL      # temp failure; user is invited to retry
+        [76]=PROTOCOL      # remote error in protocol
+        [77]=NOPERM        # permission denied
+        [78]=CONFIG        # configuration error
+    #   [78]=_MAX          # maximum listed value
 
-    [NOEXEC]=127       # common indicator, from shell, sudo, etc
+        # Local conventions
 
-)
+    #   [0]=PASS
+    #   [1]=FAIL
+        [96]=BUG
+        [255]=BROKEN
 
-declare -a EX_names=( [0]='SUCCESS' [1]='FAILURE' )
-for _v in "${!EX_values[@]}"; do
-    _=${EX_names[${EX_values[$_v]}]=$v}
-done
-declare -ar EX_names
+    #   [STATUS]=$?        # NOTE: must not be defined here, but rather immediately after the relevant command
 
-declare -Air SIGvalues=(
-    # From Linux 'kill -l'
-    [SIGHUP]=1
-    [SIGINT]=2
-    [SIGQUIT]=3
-    [SIGILL]=4
-    [SIGTRAP]=5
-    [SIGABRT]=6
-    [SIGIOT]=6
-    [SIGBUS]=7
-    [SIGFPE]=8
-    [SIGKILL]=9
-    [SIGUSR1]=10
-    [SIGSEGV]=11
-    [SIGUSR2]=12
-    [SIGPIPE]=13
-    [SIGALRM]=14
-    [SIGTERM]=15
-    [SIGSTKFLT]=16
-    [SIGCHLD]=17
-    [SIGCONT]=18
-    [SIGSTOP]=19
-    [SIGTSTP]=20
-    [SIGTTIN]=21
-    [SIGTTOU]=22
-    [SIGURG]=23
-    [SIGXCPU]=24
-    [SIGXFSZ]=25
-    [SIGVTALRM]=26
-    [SIGPROF]=27
-    [SIGWINCH]=28
-    [SIGIO]=29
-    [SIGPWR]=30
-    [SIGSYS]=31
-)
+    )
+    declare -r EX_names
+}
 
-declare -a SIGnames=()
-for _v in "${!SIGvalues[@]}"; do
-    _=${SIGnames[${SIG_values[$_v]}]=$v}
-done
-declare -ar SIGnames
+(( BASH_VERSINFO[0] >= 4 && ${#EX_values[@]} == 0 )) && {
+    declare -A EX_values=(
+
+        # POSIX/C stdlib.h
+        [EXIT_SUCCESS]=0
+        [EXIT_FAILURE]=1
+
+        # Local conventions
+        [EX_OK]=0
+        [PASS]=0
+        [OK]=0
+        [EX_FAIL]=1
+        [FAIL]=1
+    )
+    for ___ex_num in "${!EX_values[@]}"
+    do
+        ___ex_symbol="${EX_names[___ex_num]}"
+        EX_values[$___ex_symbol]=$___ex_num
+        EX_values[EX_$___ex_symbol]=$___ex_num
+    done
+    unset ___ex_num ___ex_symbol
+    declare -r EX_values
+}
+
+################################################################################
+
+# Get signal names from 'trap -l'
+(( ${#SIG_names[@]} == 0 )) && {
+    declare -a SIG_names=()
+    (( BASH_VERSINFO[0] >= 4 )) &&
+        declare -Ai SIG_values=()
+    IFS=$'\t\n' read -d '' -a ___sig_list < <( trap -l )
+    for ___sig_item in "${___sig_list[@]}"
+    do
+        ___sig_item=${___sig_item#' '}
+        [[ -n $___sig_item ]] || continue
+        ___sig_num=${___sig_item%%') '*}
+        ___sig_symbol=${___sig_item#*') SIG'}
+        [[ $___sig_symbol != *[-+]* ]] &&
+        (( BASH_VERSINFO[0] >= 4 )) &&
+            SIG_values[SIG$___sig_symbol]=$___sig_num \
+            SIG_values[$___sig_symbol]=$___sig_num
+        _=${SIG_names[$___sig_num]=SIG$___sig_symbol}  # conditional assignment
+    done
+    unset ___sig_item ___sig_list ___sig_num ___sig_symbol
+    declare -r SIG_names SIG_values
+}
+
+################################################################################
 
 exit_status() {
-    local __ex=$1 __sig=$((__ex&~128)) end_color=$2 ok_color=$3 failed_color=$4 killed_color=$5
-    case $__ex in
-    0) echo "exited with ${ok_color}SUCCESS${end_color} (0)" ; return ;;
-    1) echo "exited with ${failed_color}FAILURE${end_color} (1)" ; return ;;
-    255) echo "exited with ${failed_color}BROKEN${end_color} (255)" ; return ;;
+    local ret=$? status=${1-$ret} end_color=$2 ok_color=$3 failed_color=$4 killed_color=$5
+    local desc
+    [[ -t 1 ]] &&
+        _=${end_color=$'[39;0m'}${ok_color=$'[32;1m'}${failed_color=$'[31;1m'}${killed_color=$'[34;1m'}
+    case $status in
+        0)  printf "exited with ${ok_color}SUCCESS${end_color} (0)\n" ;;
+        1)  printf "exited with ${failed_color}FAILURE${end_color} (1)\n" ;;
+      255)  printf "exited with ${failed_color}CODE 255${end_color} (BROKEN attempt to exit with -1)\n" ;;
+        *)  if  desc=${SIG_names[status & 127]}
+                (( status & 128 )) && [[ $desc ]]
+            then
+                printf 'was killed by ${killed_color}%s${end_color}\n' "$desc"
+            elif desc=${EX_names[status]}
+                [[ $desc ]]
+            then
+                printf "exited with ${failed_color}%s${end_color} (%d)\n" "$desc" $((status))
+            else
+                printf "exited with ${failed_color}CODE %d${end_color}\n" $((status))
+            fi ;;
     esac
-
-    if ((__ex != __sig)) && [[ ${SIGnames[__sig]} ]] ; then
-        echo "was killed by ${SIGnames[__sig]}"
-        return
-    fi
-
-    if [[ ${EX_names[__ex]} ]] ; then
-        echo "exited with ${failed_color}${EX_names[__ex]}${end_color} ($((__ex)))"
-        return
-    fi
-
-    echo "exited with ${failed_color}CODE $((__ex))${end_color}"
+    return $ret
 }
+
+################################################################################
 
 _provides exit_status
