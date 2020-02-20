@@ -2,6 +2,9 @@ function cluck {
     local _o= _i=
     local _backtrace=true _only1=false _hide_depth=1 _depth_limit=${#BASH_LINENO[@]}+1 _debug=false
     local _exitcode= _message= _lineno= _source= _funcname=
+
+    _=${true=1} _=${false=0}
+
     while [[ $1 = -?* ]]
     do
         [[ $1 = --he* && '--help' = $1* ]] && {
@@ -50,9 +53,12 @@ EndOfHelp
         esac
         shift
     done
-    _message="$*"
+    if [[ $1 = *[%\\]* ]]
+    then printf -v _message "$@"
+    else _message="$*"
+    fi
 
-    $_debug && echo "
+    ((_debug)) && echo "
 DEBUG CLUCK
     backtrace=$_backtrace only1=$_only1
     depth-limit=$_depth_limit hide-depth=$_hide_depth
@@ -62,20 +68,21 @@ DEBUG CLUCK
     LINENO+BASH_LINENO=$((1+${#BASH_LINENO[*]})):($LINENO ${BASH_LINENO[*]})
 "
 
-    if $_backtrace
+    if ((_backtrace))
     then
-        (( _hide_depth > 0 )) || { ((_hide_depth=1)) ; $_debug && echo "DEBUG Increase hiding to 1" ; }
-        (( _depth_limit > _hide_depth )) || { ((_depth_limit=_hide_depth+1)) ; $_debug && echo "DEBUG Increase limit to $_depth_limit" ; }
-        for (( _i=$_hide_depth ; _i<_depth_limit ; _i++ ))
+        (( _hide_depth > 0 )) || { ((_hide_depth=1)) ; ((_debug)) && echo "DEBUG Increase hiding to 1" ; }
+        (( _depth_limit += _hide_depth ))
+        #(( _depth_limit > _hide_depth )) || { ((_depth_limit=_hide_depth+1)) ; ((_debug)) && echo "DEBUG Increase limit to $_depth_limit" ; }
+        for (( _i=_hide_depth ; _i<_depth_limit ; _i++ ))
         do
-            $_debug && echo "DEBUG showing level $_i [$( caller $((_i-1)) )]"
+            ((_debug)) && echo "DEBUG showing level $_i [$( caller $((_i-1)) )]"
             _source=${BASH_SOURCE[_i]}
             ((_i>0)) && _lineno=${BASH_LINENO[_i-1]}
             ((_lineno)) || _lineno=
 
             echo >&2 "$_message${_lineno:+ at line $_lineno}${_source:+ in $_source}"
 
-            $_only1 && break
+            ((_only1)) && break
 
             _funcname=${FUNCNAME[_i+1]}
             case $_funcname in
@@ -85,7 +92,7 @@ DEBUG CLUCK
             _message="  called${_funcname:+ from $_funcname}"
         done
     else
-        echo >&2 "$_message"
+        printf '%s\n' >&2 "$_message"
     fi
     ${_exitcode:+:} false && {
         require die
