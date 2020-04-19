@@ -13,7 +13,7 @@
 #   2 when $1 = $2
 #   3 when $1 > $2
 #   4 when $1 and $2 are not comparable
-# A simple comparison that only returns 0 or 1 is sufficient, such as
+# A simple comparison that only returns 0 or 1 is sufficient, such as 
 #   compare_string() {
 #       [[ $1 < $2 ]]
 #   }
@@ -79,7 +79,7 @@ ___iq_rcmp() {
     (( $1 == ___iq_cmp_A &&
        $2 == ___iq_cmp_B )) || {
         cluck "rcmp has different parameters ($1,$2) from preceding cmp ($___iq_cmp_A,$___iq_cmp_B)"
-        ___iq_cmp_R=1
+        ___iq_cmp_R=1 
         ___iq_cmp "$1" "$2"
     }
 
