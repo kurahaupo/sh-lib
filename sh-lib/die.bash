@@ -1,40 +1,48 @@
-function die {
-    STATUS=$?
-    set +x
 
-    EX_STATUS=STATUS \
-    OK=0            EX_OK=OK \
-    FAIL=1          EX_FAIL=FAIL \
-    USAGE=64        EX_USAGE=USAGE \
-    DATAERR=65      EX_DATAERR=DATAERR \
-    NOINPUT=66      EX_NOINPUT=NOINPUT \
-    NOUSER=67       EX_NOUSER=NOUSER \
-    NOHOST=68       EX_NOHOST=NOHOST \
-    UNAVAILABLE=69  EX_UNAVAILABLE=UNAVAILABLE \
-    SOFTWARE=70     EX_SOFTWARE=SOFTWARE \
-    OSERR=71        EX_OSERR=OSERR \
-    OSFILE=72       EX_OSFILE=OSFILE \
-    CANTCREAT=73    EX_CANTCREAT=CANTCREAT \
-    IOERR=74        EX_IOERR=IOERR \
-    TEMPFAIL=75     EX_TEMPFAIL=TEMPFAIL \
-    PROTOCOL=76     EX_PROTOCOL=PROTOCOL \
-    NOPERM=77       EX_NOPERM=NOPERM \
-    CONFIG=78       EX_CONFIG=CONFIG \
-    BUG=96          EX_BUG=BUG \
-                    EX_INTERNAL=BUG \
-    NOEXEC=127      EX_NOEXEC=NOEXEC \
-    SIGHUP=1+128    SIGFPE=8+128    SIGSTKFLT=16+128 SIGXCPU=24+128 \
-    SIGINT=2+128    SIGKILL=9+128   SIGCHLD=17+128   SIGXFSZ=25+128 \
-    SIGQUIT=3+128   SIGUSR1=10+128  SIGCONT=18+128   SIGVTALRM=26+128 \
-    SIGILL=4+128    SIGSEGV=11+128  SIGSTOP=19+128   SIGPROF=27+128 \
-    SIGTRAP=5+128   SIGUSR2=12+128  SIGTSTP=20+128   SIGWINCH=28+128 \
-    SIGABRT=6+128   SIGPIPE=13+128  SIGTTIN=21+128   SIGIO=29+128 \
-    SIGIOT=6+128    SIGALRM=14+128  SIGTTOU=22+128   SIGPWR=30+128 \
-    SIGBUS=7+128    SIGTERM=15+128  SIGURG=23+128    SIGSYS=31+128
-    (( _e = ${1:-STATUS} ))
-    shift
-    IFS=' '
-    (($#)) && printf >&2 '%s\n' "$*"
-    exit $_e
+function die {
+    original_status=$?
+    (( __DIE_DEBUG )) || set +x
+
+    # Because EX_values and SIG_values are readonly, only attempt to set them
+    # if they're unset. (Inability to localize and turn off read-only could be
+    # construed as a bug in the shell.)
+    if (( ${#EX_values[@]} == 0 )); then
+        # copied from exit_status.bash
+        # status names may be given as either EX_xx or EXIT_xx
+        declare -A EX_values=(
+            [SUCCESS]=0 [OK]=0 [PASS]=0
+            [FAILURE]=1 [FAIL]=1
+            [USAGE]=64 [DATAERR]=65 [NOINPUT]=66 [NOUSER]=67 [NOHOST]=68
+            [UNAVAILABLE]=69 [SOFTWARE]=70 [OSERR]=71 [OSFILE]=72 [CANTCREAT]=73
+            [IOERR]=74 [TEMPFAIL]=75 [PROTOCOL]=76 [NOPERM]=77 [CONFIG]=78
+            [BUG]=96 [INTERNAL]=96
+            [NOEXEC]=127
+            [BROKEN]=255
+        )
+    fi
+
+    if (( ${#SIG_values[@]} == 0 )); then
+        # Linux-specific version; may not work elsewhere.
+        declare -A SIG_values=(
+            [HUP]=1 [FPE]=8 [STKFLT]=16 [XCPU]=24 [INT]=2 [KILL]=9 [CHLD]=17
+            [XFSZ]=25 [QUIT]=3 [USR1]=10 [CONT]=18 [VTALRM]=26 [ILL]=4
+            [SEGV]=11 [STOP]=19 [PROF]=27 [TRAP]=5 [USR2]=12 [TSTP]=20
+            [WINCH]=28 [ABRT]=6 [PIPE]=13 [TTIN]=21 [IO]=29 [IOT]=6 [ALRM]=14
+            [TTOU]=22 [PWR]=30 [BUS]=7 [TERM]=15 [URG]=23 [SYS]=31
+        )
+    fi
+
+    { exit_code=10#$1                  ; [[ $1 != *[!0-9]*     ]] ; } ||
+    { exit_code="EX_values[${1#EX*_}]" ; [[ ${!exit_code+X}    ]] ; } ||
+    { exit_code="SIG_values[${1#SIG}]" ; [[ ${!exit_code+X}    ]] && (( exit_code|= 128 )) ; } ||
+    { exit_code=original_status        ; [[ $1 = ?(EX*_)STATUS ]] ; } && shift
+    if [[ $* ]] ; then
+        [[ $1 != *[%\\]* ]] && { IFS=' ' ; set -- '%s\n' "$*" ; } ||
+        [[ $1 = *'\n' || $1 = *$'\n' ]] || set -- "$1\\n" "${@:2}"
+        printf >&2 "$@"
+    fi
+
+    exit $((exit_code))
 }
+
 _provides die
