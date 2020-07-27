@@ -28,7 +28,7 @@
 # The 5th parameter is used to continue an incremental sort; it should be the
 # name of an array variable.  Whether that variable is used and what it
 # contains depends on which type of sort is used.
-# It should either be
+# It should either be 
 #
 # Upon return, the nominated range will be correctly sorted, and if this is
 # part of an incremental sort, any previously sorted ranges will also remain
@@ -317,7 +317,7 @@ hhsort_array() {
 #           ((___j+1<___m)) && ___sorts_before "${___array[___j]}" "${___array[___j+1]}" && ((++___j))
 # #         ((___sort_debug)) && printf 'COMPARE %u "%s" AND ROOT "%s"\n' $___j "${___array[___j]}" "$___x"
 #           ___sorts_before "${___array[___j]}" "${___x}" && break
-# #         ((___sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $___j "${___array[___j]}" $___i
+# #         ((___sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $___j "${___array[___j]}" $___i 
 #           ___array[$___i]="${___array[$___j]}"
 #       done
 # #     ((___sort_debug)) && printf 'MOVE %u VIA ROOT TO %u "%s"\n\n' $___m $___i "$___x"
