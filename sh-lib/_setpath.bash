@@ -2,8 +2,11 @@ function _setpath {
     [[ -n ${true+_}  ]] || local -ri true=1  || { return ; echo >&2 ERROR cannot set true=1 in _setpath ; }
     [[ -n ${false+_} ]] || local -ri false=0 || { return ; echo >&2 ERROR cannot set false=0 in _setpath ; }
     (( true == 1 && false == 0 )) || { echo >&2 ERROR: true=$true false=$false ; return ; }
-    local -ri FORCE=1 ALLOW=0 NEVER=-1
-    local -r PERMIT=ALLOW NEED=FORCE REQUIRE=FORCE PROHIBIT=NEVER NO=NEVER DONT=NEVER
+    local -ri ALLOW=0 PERMIT=0
+    local -ri ALWAYS=1 DO=1 FORCE=1 NEED=1 REQUIRE=1
+    local -ri AVOID=-1 DONT=-1 FORBID=-1 NEVER=-1 NO=-1 NOT=-1 PROHIBIT=-1
+    local -ri UNEQUAL=2
+
     local   pathvar= mode=end clear=false arg= orig_arg= elem= xdir= \
             sep=: prefix= suffix= realpath=false verbose=false \
             if_exist=false if_dir=false if_file=false if_link=false \
@@ -11,26 +14,27 @@ function _setpath {
             use_hosttype=false move=all xrel= dot=ALLOW \
             quotenext=false quoteall=false
     local -a path=() xparts=()
-    local -A separators=(
-        [colon]=':'
-        [comma]=','
-        [semicolon]=';'
-        [space]=' '
-    )
 
     if [[ $* = "-h" || "--help" = "$*"* && $* = "--h"* ]]
     then
         cat <<EOM
 Usage: $FUNCNAME [options...] {variable-name} [[--append|--prefix|--delete|--clear] path]...
 Options include:
-   --allow-dot, --no-dot, --force-dot           Convert "" to . or vice-versa
+   --allow-dot, --allow-empty                   Take "." or "" as given but synonymous
+   --avoid-dot, --force-empty                   Convert "." to ""
+   --force-dot, --avoid-empty                   Convert "" to "."
+   --no-merge-space-dot                         Take "." and "" as distinct from each other
    --if-exists, --if-dir, --if-file, --always   Test path before adding it?
    --move, --move-if-rel, --move-if-abs         What if a path is already there
-   --part-separator=":", --part-prefix="", --part-suffix=""
-        The defaults are useful for PATH, LD_LIBRARY_PATH and many others, but
-        it can also be used to set directories in CCFLAGS by using --space -I
+   --use-host-type                              Include architecture-specific suffices on paths
+   --separator=:, --colon                       Default separator is colon; also recognizes semicolon, comma & space
+   --prefix="", --suffix=""                     Default prefix & suffix are empty
+
    --verbose                                    Print final result
    --help                                       This message
+
+        These defaults are useful for PATH, LD_LIBRARY_PATH and many others, but
+        it can also be used to set directories in CCFLAGS by using --space -I
 EOM
         return 0
     fi
@@ -46,7 +50,8 @@ EOM
             (-- | --quote-all)          quoteall=true ;;
             (- | -q | --quote-next)     quotenext=true ;;
             (--always)                  if_dir=false if_file=false if_link=false if_notlink=false if_exist=false ;;
-            (--dot=@(ALLOW|FORCE|NEVER)) dot=${arg#*=} ;;
+            (--dot=[A-Z]*)              dot=${arg#*=} ;;
+            (--empty=[A-Z]*)            dot=-${arg#*=} ;;
             (--if-dir | -d)             if_dir=true ;;
             (--if-exists | -e)          if_exist=true ;;
             (--if-file | -f)            if_file=true ;;
@@ -57,24 +62,23 @@ EOM
             (--move=NEVER)              move=none ;;
             (--prefix=*)                prefix=${arg#-*=} ;;
             (--real-path)               realpath=true ;;
-            (--separator=*)             if [[ -n ${separators[${arg#-*=}]+_} ]]
-                                        then printf -v sep %s "${separators[${arg#-*=}]}"
-                                        else printf -v sep %b "${arg#-*=}"
-                                        fi
+            (--?(separator=)colon)      sep=':' ;;
+            (--?(separator=)comma)      sep=',' ;;
+            (--?(separator=)semicolon)  sep=';' ;;
+            (--?(separator=)space)      sep=' ' ;;
+            (--separator=*)             printf -v sep %b "${arg#-*=}"
                                         (( ${#sep} == 1 )) || {
                                             echo "# $FUNCNAME: Invalid separator '$sep' (not a single character)"
                                             return 1
                                         }
                                         ;;
+            (--no-merge-@(space-dot|dot-space))
+                                        dot=UNEQUAL ;;
             (--suffix=*)                suffix=${arg#-*=} ;;
-            (--use-hosttype)            use_hosttype=true xparts=() ;;
-            (--use-hosttype=NEVER)      use_hosttype=fa xparts=() ;;
+            (--use-host?(-)type)        use_hosttype=true xparts=() ;;
+            (--use-host?(-)type=[A-Z]*) use_hosttype=${arg#*=} ; (( use_hosttype = use_hosttype > 0 )) ; xparts=() ;;
             (-[A-Z])                    sep=' ' prefix=$arg ;;
 
-            (--space)                   sep=' ' ;;
-            (--semicolon)               sep=';' ;;
-            (--colon)                   sep=':' ;;
-            (--comma)                   sep=',' ;;
             (-[#%^+:,/\;])              sep=${arg:1} ;;
 
             (-a | --append)             mode=end xparts=() ;;
@@ -83,9 +87,9 @@ EOM
             (-p | --prefix)             mode=begin xparts=() ;;
             (-v | --verbose)            verbose=true ;;
 
-            ( --@(allow|always|do|dont|force|need|never|no|not|permit|prohibit|require)-* )
-                                        pi=${arg#--*-}
-                                        set -- "--$pi=${arg:2:-1-${#pi}}" "$@"
+            ( --@(allow|always|avoid|do|dont|forbid|force|need|never|no|not|permit|prohibit|require)-* )
+                                        pi=${arg#--*-} arg=${arg%-"$pid"} arg=${arg#--}
+                                        set -- "--$pi=${arg^^}" "$@"
                                         continue ;;
 
             ( --*=@(allow|permit)                 )  set -- "${arg%%=*}=ALLOW" "$@" ; continue ;;
@@ -169,7 +173,14 @@ EOM
                 elem=$( _realpath $elem )
             fi
             xdir="$prefix$elem$suffix"
-            if (( ${#path[@]} )) && for pi in "${!path[@]}" ; do [[ "${path[$pi]}" = "$xdir" ]] && break ; done
+            if (( ${#path[@]} )) &&
+                for pi in "${!path[@]}" ; do
+                    [[ "${path[$pi]}" = "$xdir" ]] &&   # either an exact match
+                        break
+                    [[ "${path[$pi]}$xdir" = . ]] &&    # or, one is "." and the other is "" and
+                        (( !( dot & UNEQUAL ) )) &&     # not treating "." and "" as distinct
+                        break
+                done
             then
                 [[ $mode = delete || ( $move = all || $move = $xrel ) ]] || continue
                 unset "path[$pi]"
@@ -220,5 +231,5 @@ EOM
 }
 _provides _setpath
 
-p()  { _setpath --colon PATH -v ; }
-sp() { _setpath --colon PATH "$@" ; }
+[[ $- = *i* ]] &&
+sp() { _setpath --colon PATH --if-dir --use-hosttype "$@" ; }
