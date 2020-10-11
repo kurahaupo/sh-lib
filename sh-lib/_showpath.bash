@@ -1,8 +1,14 @@
 function _showpath {
-    local _var=${1:?'Missing param'}
-    eval local _path=\"\$$_var\"
-    local IFS=: _p _h _u
-    for _p in $_path
+    if [[ $1 = -a ]]
+    then
+        local _var=${2:?'Missing param'}[@]
+        local -a _path=( "${!_var}" )
+    else
+        local _var=${1:?'Missing param'}
+        IFS=: eval 'local -a _path=( ${!_var} )'
+    fi
+    local _p _h _u
+    for _p in "${_path[@]}"
     do
         case $_p/ in
         $HOME/*) _p='~'${_p#$HOME} ;;
@@ -21,3 +27,6 @@ function _showpath {
     [[ "$_path" = *?: ]] && echo "    ."
 }
 _provides _showpath
+
+[[ $- = *i* ]] &&
+p()  { _setpath --colon PATH -v ; }
