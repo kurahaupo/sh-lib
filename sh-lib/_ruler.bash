@@ -1,12 +1,20 @@
 function _ruler {
-    local R='' T='-' w=${COLUMNS:-$(set -- $(stty size);echo ${2:-80})}\*2
+    local R='' T='-' w=$COLUMNS
+    [[ $w ]] || {
+        read _ w _ < <( stty size ) || w=40
+        (( w *= 2 ))
+    }
     while
         let "w/=2"
     do  let "w&1" && R="$R$T"
         T="$T$T"
     done
-    let $# && case $1 in -c|--clear) echo -n $'\ec' ;; *) echo >&2 "Invalid option $1" ; return 1 ;; esac
-    echo $'\e[7m'"$R"$'\e[m'
+    (( $# )) &&
+        case $1 in
+            -c | --clear)   printf '\ec' ;;
+            *)              echo >&2 "Invalid option $1" ; return 1 ;;
+        esac
+    printf '\e[7m%s\e[m' "$R"
 }
 _provides _ruler
 
