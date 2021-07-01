@@ -6,23 +6,96 @@ require cluck
 
 # Call this as
 #   . getlongopt.bash <<'EOF'
-#   --foo           value=true,neg          $foo            Enable Foo
+#   --foo           value=true,neg          foo=            Enable Foo
 #   --bar           opt                     set_bar
-#   --whence        date                    $since
-#   --until         time                    $until
-#   --count         num                     $when
-#   --delay         duration                $delay
-#   --go,-g         group                   $action   
-#   --stop,-h       group                   $action
-#   --status,-s     group                   $action
-#   --verbose,-v    num,opt,count,neg       $verbose
-#   --quiet,-q      value=false,neg         $verbose
+#   --whence        date                    since=
+#   --until         time                    until=
+#   --count         num                     when=
+#   --delay         duration                delay=
+#   --go,-g         group                   action=
+#   --stop,-h       group                   action=
+#   --status,-s     group                   action=
+#   --verbose,-v    num,opt,count,neg       verbose=
+#   --quiet,-q      value=false,neg         verbose=
 #   EOF
+#
+# Note that because this is intended to operate on "$@" of the main script, it
+# does not take any arguments of its own. All configuration is instead conveyed
+# through stdin, which will normally be provided as a heredoc.
+#
+# In this description, "argument" refers to an argument provided to the outer
+# script which this script attempts to parse.
+#
+# As an alternative mode of operation, it can define
+#
+# Reads lines from stdin, and processes sections.
+#
+#   A line starting with '@' starts a new section; the first word denotes the
+#   kind of section, and the remainder of the line is a list of space-separated
+#   parameters for the section.
+#
+#   Lines that do not start with '@' are input for that preceding section.
+#
+#   The following sections are predefined:
+#       @config [key=value ...]
+#       @synopsis [text]
+#       @options
+#       @args
+#       @description
+#
+#   If the first line does not start with '@' then '@options' is assumed.
+#
+#   The @config section should normally come first, as some settings may
+#   affect how other sections are parsed or interpreted. It should be followed
+#   by a list of keyword=value pairs; these mimic the parameters available in
+#   Perl's Getopt::Long::configure.
+#       * permute=[true|false]
+#       * bundling=[true|false]
+#       * func=[function_name]     define a function that processes the args
+#               without the option, an anonymous function will be defined, and immediately invoked.
+#
+#   The @synopsis section simply contains readable text that is shown. Because
+#   it's within a heredoc, the name by which the script was invoked can be
+#   given simply as ${0##*/}.
+#
+#   The @options section defines the available command-line options, where each
+#   line starting with '-' starts a new option definition.
+#
+#   Each subsection starts with 3 space-delimited fields:
+#    *  a comma-separated list of option names, each starting with '-' or '--'
+#    *  a comma-separated list of controls
+#    *  a target;
+#
+#   The controls include:
+#       opt     takes an optional argument
+#       flag    takes no argument, and uses "true" as the value
+#       neg     also register the inverse option that uses "false" as the
+#               value:
+#               * for a short option -x, that will be the uppercase version -X
+#               * for a long option --xxx, that will be --no-xxx;
+#       group   use the option name (minus any leading '-' or '--') as the value
+#       single  do not allow the option (or its inverse, or any other option in
+#               the same group) to be specified more than once.
+#
+#
+#   If the target starts with '$' then it denotes a variable that is set to the
+#   value, otherwise it denotes a callback function which is invoked with the
+#   value as the first parameter and the option name as the second parameter.
+#
+#   The @args section behaves like a subsection of the @options, but is used to
+#   treat any argument that does _not_ start with a '-'.
+#
+#
 
 declare -ri true=1 false=0 #yes=1 no=0 YES=1 NO=0
 declare -ri UNSPEC=0 FORBIDDEN=1 OPTIONAL=2 REQUIRED=3
 
 declare -r mirror_pairs='()<>[]{}«»'
+declare -A mirror_swap=()
+for ((___mt_i=0, l=${#mirror_pairs};___mt_i<l;++___mt_i)) do
+    mirror_swap[${mirror_pairs:___mt_i:1}]=${mirror_pairs:___mt_i^1:1}
+done
+declare -r mirror_swap
 
 #
 ## mirror_token
@@ -38,20 +111,15 @@ declare -r mirror_pairs='()<>[]{}«»'
 #
 
 mirror_token() {
-    if [[ $1 = *[$mirror_pairs]* ]]; then
-        local ee=${!1} i ec ep es
-        local -A swap=()
-        for ((i=0, l=${#mirror_pairs};i<l;++i)) do
-            swap[${mirror_pairs:i:1}]=${mirror_pairs:i^1:1}
-        done
-        ep=${ee%%[!"$mirror_pairs"#]*}
-        ee=${ee#"$ep"}
-        es=${ee##*[!"$mirror_pairs"]}
-        ee=${ee%"$es"}
-        for (( i = ${#ep}-1 ; i >= 0 ; --i )) do ec=${ep:i:1} ee=$ee${swap[$ec]-$ec} ; done
-        for (( i = 0 ; i <= ${#es}-1 ; ++i )) do ec=${es:i:1} ee=${swap[$ec]-$ec}$ee ; done
-        printf -v $1 %s "$ee"
-    fi
+    local ___mtoken=${!1} ___mt_i ___mt_char ___mt_ep ___mt_es
+    [[ $___mtoken != *[$mirror_pairs]* ]] && return 0  # nothing to change
+    ___mt_ep=${___mtoken%%[!"$mirror_pairs"#]*}
+    ___mtoken=${___mtoken#"$___mt_ep"}
+    ___mt_es=${___mtoken##*[!"$mirror_pairs"]}
+    ___mtoken=${___mtoken%"$___mt_es"}
+    for (( ___mt_i = ${#___mt_ep}-1 ; ___mt_i >= 0 ; --___mt_i )) do ___mt_char=${___mt_ep:___mt_i:1} ___mtoken=$___mtoken${mirror_swap[$___mt_char]-$___mt_char} ; done
+    for (( ___mt_i = 0 ; ___mt_i <= ${#___mt_es}-1 ; ++___mt_i )) do ___mt_char=${___mt_es:___mt_i:1} ___mtoken=${mirror_swap[$___mt_char]-$___mt_char}$___mtoken ; done
+    printf -v $1 %s "$___mtoken"
 }
 
 getlongopts() {
@@ -63,7 +131,7 @@ getlongopts() {
     local -a names
     local -a flaglist
 
-    local name flags target description 
+    local name flags target description
 
     local -A longnames=()
     local -A shortnames=()
@@ -145,7 +213,7 @@ getlongopts() {
                 eval "
                     $target() {
                         local v=\$1 n=\$2
-                        (($_debug)) && cluck " set_or_inc $*"
+                        ((_debug)) && cluck " set_or_inc $*"
                         if (( n != $store_neg ))
                         then (( $var = ! (\${v:-${use_value:-true}}) ))
                         elif [[ -z \$v ]]
@@ -158,7 +226,7 @@ getlongopts() {
                 target=arg_set_${name//+[![0-9A-Za-z]]/_}
                 eval "
                     $target() {
-                        (($_debug)) && cluck " set $*"
+                        ((_debug)) && cluck " set $*"
                         local v=\$1 n=\$2
                         if (( n != $store_neg ))
                         then (( $var = ! (\${v:-${use_value:-true}}) ))
@@ -268,7 +336,7 @@ getlongopts() {
                 if [[ $opt_name = -? ]]
                 then
                     if (( opt_argmode[opt_num] == REQUIRED )); then
-                        opt_param=$2 
+                        opt_param=$2
                         shift
                     fi
                 else
