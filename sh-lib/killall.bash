@@ -663,12 +663,12 @@ __pinfo() {
         if [[ $owned_by ]] ; then
             if
                 for uid in "${Pstatus_uid[@]}" ; do
-                    (( owned_by == uid )) && break 
+                    (( owned_by == uid )) && break
                     false
                 done
                 d2printf v_TRACE MATCHED skipping 'Owned-by=%u uids=(%s)\n' "$owned_by" "${Pstatus_uid[*]}"
             then :
-            else continue 
+            else continue
             fi
         fi
 
