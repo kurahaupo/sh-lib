@@ -18,7 +18,7 @@ ip._get_parts() {
     done
     (( ${#__gp_res[@]} == __gp_nparts || __gp_nparts == -1 )) ||
         { printf >&2 'Invalid %s address "%s" - wrong number of parts (expected %s, got %u\n' \
-                     "$__gp_label" "$__gp_in" "$__gp_nparts" ${#__gp_res[@]} 
+                     "$__gp_label" "$__gp_in" "$__gp_nparts" ${#__gp_res[@]}
           return 65 ; } # EX_DATAERR
 }
 
@@ -49,7 +49,7 @@ then
         done
         (( ${#__gp_res[@]} == __gp_nparts || __gp_nparts == -1 )) ||
             { printf >&2 'Invalid %s address "%s" - wrong number of parts (expected %s, got %u\n' \
-                         "$__gp_label" "$__gp_in" "$__gp_nparts" ${#__gp_res[@]} 
+                         "$__gp_label" "$__gp_in" "$__gp_nparts" ${#__gp_res[@]}
               return 65 ; } # EX_DATAERR
         _arraycopy "$__gp_ref" "${__gp_res[@]}" ||
             { printf >&2 'ip._get_parts failed to set return array %s=(%s)\n' \
@@ -115,7 +115,7 @@ ip.canon_v4() {
         for ((; ++__ca4_i < 4 ;)) do (( __ca4_res[__ca4_i]  =  __ca4_parts[__ca4_i] )) ; done
       # debug CANON '                   → %u.%u.%u.%u' "${__ca4_res[@]:0:4}"
         shift &&
-        shift && 
+        shift &&
         (( $# && ( __ca4_i = ${1:-32} ) < 32 ))
     do
         (( __ca4_i != __ca4_plen )) ||
