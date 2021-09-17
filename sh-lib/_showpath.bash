@@ -28,5 +28,8 @@ function _showpath {
 }
 _provides _showpath
 
-[[ $- = *i* ]] &&
-p()  { _setpath --colon PATH -v ; }
+if [[ $- = *i* ]]
+then
+    p()  { _showpath PATH ; }
+    _provides p
+fi
