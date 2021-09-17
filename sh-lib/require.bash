@@ -2,7 +2,7 @@
 # Note the convention to use "function foo" rather than "foo()" so that aliases
 # can't mangle these declarations.
 
-: ${FPATH="${BASH_SOURCE[0]%/*}:/usr/lib/sh-lib:/usr/local/lib/sh-lib:$HOME/.sh-lib"}
+: ${FPATH="/usr/lib/sh-lib:/usr/local/lib/sh-lib:$HOME/.sh-lib"}
 
 # Never abort an interactive shell because of failure, but always give diagnostics
 [[ $- = *i* ]] && __REQUIRE_FAILURE_ISFATAL__=false __REQUIRE_FAILURE_VERBOSE__=true
@@ -37,10 +37,12 @@ then
     function __require_is_loaded {
         [[ -n ${__require_LOADED2[$1]:+X} ]]
     }
+    _provides __require_is_loaded
 
     function __require_unloaded {
         unset "__require_LOADED2[$1]"
     }
+    _provides __require_unloaded
 
 else
 
@@ -64,15 +66,19 @@ else
     function __require_is_loaded {
         [[ "$__require_LOADED1" = *";$1<"* ]]
     }
+    _provides __require_is_loaded
 
     function __require_unloaded {
         __require_LOADED1+=';'
         __require_is_loaded "$1" &&
-            __require_LOADED1="${__require_LOADED1%%";$1<"*};${__require_LOADED1#*";$1<"*";"}"
+            __require_LOADED1=${__require_LOADED1%%";$1<"*};${__require_LOADED1#*";$1<"*";"}
         __require_LOADED1=${__require_LOADED1%\;}
     }
+    _provides __require_unloaded
 
 fi
+
+_provides __require_warning __require_failed
 
 function __require_load_file {
     local _f="$1" _r="$2" ; shift ; shift
@@ -89,6 +95,7 @@ function __require_load_file {
     ((!_verbose)) || printf >&2 '# loaded "%s"\n' "$_r"
     return 0
 }
+_provides __require_load_file
 
 function require {
     [[ ${false+_} ]] || local -ri false=0
@@ -159,6 +166,7 @@ _provides require
 
 function autoload {
     local _p _r _h
+    [[ "$*" = --all ]] && set -- "$HOME"/.sh-lib/*.*sh
     for _p do
         _r=${_p##*/}
         _r=${_r%.*sh}
@@ -166,17 +174,27 @@ function autoload {
         __require_is_loaded "$_r" && continue
         case $_r in
         (autoload|--|.*|*~|*[!0-9a-zA-Z_.:-]*) continue ;;
-        (carp|cluck|croak|confess) _h=' -h' ;;
+        (carp|cluck|croak|confess) _h=' -h' ;;  # omit the autoloader function from stack trace
         esac
         unalias 2>/dev/null "$_r"
         if [[ $p = $r ]]
         then
             # Was given just a function name
-            eval " function $_r { require $_r && $_r$_h \"\$@\" ; } "
+            eval "
+                function $_r {
+                    require $_r &&
+                    $_r$_h \"\$@\"
+                }
+            "
         else
             # Was given a pathname
             printf -v _p %q "$_p"   # undo eval
-            eval " function $_r { require -p $_p $_r && $_r$_h \"\$@\" ; } "
+            eval "
+                function $_r {
+                    require -p $_p $_r &&
+                    $_r$_h \"\$@\"
+                }
+            "
         fi
     done
 }
@@ -199,12 +217,5 @@ if [[ -n "$*" ]] && ! (
     (( BASH_ARGC[0] == 0 )) # in case this gets fixed sometime
    )
 then
-    if [[ "$*" = --all ]]
-    then
-        autoload -- "$HOME"/.sh-lib/*
-    else
-        autoload -- "$@"
-    fi
+    autoload -- "$@"
 fi
-
-#_provides __require_is_loaded __require_load_file __require_warning __require_failed __require_unloaded
