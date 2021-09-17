@@ -231,5 +231,8 @@ EOM
 }
 _provides _setpath
 
-[[ $- = *i* ]] &&
-sp() { _setpath --colon PATH --if-dir --use-hosttype "$@" ; }
+if [[ $- = *i* ]]
+then
+    sp() { _setpath --colon PATH --if-dir --use-hosttype "$@" ; }
+    _provides sp
+fi
