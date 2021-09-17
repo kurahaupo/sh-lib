@@ -5,9 +5,9 @@
 #
 # Firstly, check whether it's a subdirectory of the current directory, if
 # enabled
-# -
-#
-#
+# - highlight current directory
+# - for dirs, skip this when showing first part (which is $PWD)
+# 
 # Then check for any user's home directory:
 # - if not under any home, part 1 & user will be empty
 # - if under own home, part 1 is empty, and "user" is "~"
@@ -22,10 +22,10 @@
 #
 
     _=${__np_cc_relative=$'\e[38;5;10m'}
-     _=${__np_cc_dnszone=$'\e[38;5;14m'}
+     _=${__np_cc_dnszone=$'\e[38;5;14m'}    
         _=${__np_cc_host=$'\e[38;5;13m'}
  _=${__np_cc_leadingpath=$'\e[38;5;8m'}    # parent of a home directory, a zonefile, a logfile, etc
-      _=${__np_cc_logdir=$'\e[38;5;14m'}
+      _=${__np_cc_logdir=$'\e[38;5;14m'}     
 #   _=${__np_cc_non_home=$'\e[38;5;129m'}  # anything in /home or /serve/users that is NOT a user's home dir
         _=${__np_cc_root=$'\e[38;5;11m'}
    _=${__np_cc_user_home=$'\e[38;5;11m'}
@@ -84,7 +84,7 @@ _nice_path() {
         d=${d#"$x"}
         if (( cc < ${#x} )); then
             if (( cc <= 0 )); then
-                (( rc )) && [[ -z $c ]] && printf "$__np_cc_reset"
+                (( rc )) && [[ -z $c ]] && printf %s "$__np_cc_reset"
                 printf %s%s "$c" "$x"
             else
                 printf '%s%s%s%s' "$__np_cc_relative" "${x:0:cc}" "${c:-$__np_cc_reset}" "${x:cc}"
@@ -133,7 +133,7 @@ _nice_path() {
         #: $'\e[m' M1 special exceptions for whole paths
         __np_p1 '*' "$__np_cc_root"
         unset -f __np_p1 __np_p0
-        ((rc)) && printf "$__np_cc_reset"
+        ((rc)) && printf %s "$__np_cc_reset"
         printf '\n'
         return
         ;;
@@ -151,18 +151,9 @@ _nice_path() {
         local x=${d%"/${d##@(*/users/!(*/*)|*/home/!(*/*)|/root)/}"}
         # x=/root or /home/$user or /serve/users/$user
         local u=${x##*/}
-      # local -a uu="( ~$u )"   # expand ~ and glob without generalized eval
-      # if
-      # then
-      #     uu=${uu%:*} uu=${uu##*:}
-      #     IFS=: read -ra uu <<<"$uu"
-      #     uu=( "${uu[5]}" )
-      # fi
-        #: $'\e[m' M3 $x looks like "~$u" "${uu[*]}"
         if [[ -n $x &&  -r $chroot/etc/passwd ]] &&
             cut -d: -f6 < "$chroot/etc/passwd" | grep -qsxF "${x%/}"
         then
-            #: $'\e[m' M3 "$x" = "~$u" = "${uu[*]}" confirmed
             if (( __np_full_homes )) || [[ $chroot ]]
             then
                 __np_p1 "${x%$u}" "$__np_cc_leadingpath"
@@ -174,10 +165,6 @@ _nice_path() {
             fi &&
             __np_p0 "$u" "$__np_cc_user_home" &&
             __np_p1 /
-      # else
-      #     u=${x##*/}
-      #     __np_p1 "${x%$u}" "$__np_cc_leadingpath"
-      #     __np_p0 "$u" "$__np_cc_non_home"
         fi
         ;;
     esac
@@ -221,7 +208,7 @@ _nice_path() {
 
     __np_p1 '*'
     unset -f __np_p1 __np_p0
-    ((rc)) && printf "$__np_cc_reset"
+    ((rc)) && printf %s "$__np_cc_reset"
     printf '\n'
 }
 
@@ -230,7 +217,7 @@ dirs() {
     for d in "${DIRSTACK[@]}"
     do
         _nice_path "$d" "$pp"
-        pp="$PWD"
+        pp=$PWD
     done
 }
 
