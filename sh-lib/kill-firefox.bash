@@ -19,10 +19,7 @@ kill-firefox() {
          --fpe    | --kill | --usr1   | --segv | --usr2  | --pipe | --alrm | --term | \
          --stkflt | --chld | --cont   | --stop | --tstp  | --ttin | --ttou | --urg  | \
          --xcpu   | --xfsz | --vtalrm | --prof | --winch | --io   | --pwr  | --sys  )
-                             sig=${1#--} sig=${sig^^} ;;       # 31
-
-       # --rtmin)           sig=RTMIN ;;     # 34
-       # --rtmax)           sig=RTMAX ;;     # 64
+                             sig=${1#--} sig=${sig^^} ;;
 
          --rt+!(*[!0-9]*))  sig=RTMIN${1#--rt} ;;
          --rt-!(*[!0-9]*))  sig=RTMAX${1#--rt}+1 ;;
@@ -42,7 +39,7 @@ kill-firefox() {
          -v|--verbose|-nq)  show=1 ;;
 
          -*)                printf >&2 "Invalid option '%s'\n" "$1" ; return 64 ;;
-         *)                 printf >&2 "Non-option arg not allowed ('%s')\n" "$1" ; return 64 ;;
+         *)                 printf >&2 "Non-option args not allowed ('%s')\n" "$1" ; return 64 ;;
         esac
         shift
     done
