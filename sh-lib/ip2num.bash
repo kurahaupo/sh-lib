@@ -2,7 +2,6 @@
 function ip2num {
     local i=$1 r=0 j
     local -a q x
-    q=( 24 16 8 0 )
     IFS=. read -ra x <<<"$i"
     for ((j=0;j<4;j++)) do
         ((r|=x[j]<<(~j<<3&24)))
