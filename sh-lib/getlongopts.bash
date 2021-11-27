@@ -26,7 +26,9 @@ require cluck
 # In this description, "argument" refers to an argument provided to the outer
 # script which this script attempts to parse.
 #
-# As an alternative mode of operation, it can define
+# As an alternative mode of operation, it can define a function that can be
+# called once other set-up has been done. This may be useful if options have to
+# be parsed repeatedly.
 #
 # Reads lines from stdin, and processes sections.
 #
@@ -87,18 +89,26 @@ require cluck
 #
 #
 
-declare -ri true=1 false=0 #yes=1 no=0 YES=1 NO=0
-declare -ri UNSPEC=0 FORBIDDEN=1 OPTIONAL=2 REQUIRED=3
+for c in true=1 false=0 \
+         UNSPEC=0 FORBIDDEN=1 OPTIONAL=2 REQUIRED=3 \
+       # yes=1 no=0 YES=1 NO=0 \
 
-declare -r mirror_pairs='()<>[]{}«»'
-declare -A mirror_swap=()
-for ((___mt_i=0, l=${#mirror_pairs};___mt_i<l;++___mt_i)) do
-    mirror_swap[${mirror_pairs:___mt_i:1}]=${mirror_pairs:___mt_i^1:1}
+do
+    [[ -v ${c%%=*} ]] && (( ${c%%=*} == ${c#*=} )) && continue
+    declare -ri "$c"
 done
-declare -r mirror_swap
+
+[[ -v __getlongopts_mirror_pairs ]] || {
+    declare -r __getlongopts_mirror_pairs='()<>[]{}«»'
+    declare -A __getlongopts_mirror_swap=()
+    for ((___mt_i=0, l=${#__getlongopts_mirror_pairs};___mt_i<l;++___mt_i)) do
+        __getlongopts_mirror_swap[${__getlongopts_mirror_pairs:___mt_i:1}]=${__getlongopts_mirror_pairs:___mt_i^1:1}
+    done
+    declare -r __getlongopts_mirror_swap
+}
 
 #
-## mirror_token
+## __getlongopts_mirror_token
 #
 # Given a start-group token, generate its corresponding end-group token,
 # which will be used to find the end of the group. Specifically, any
@@ -110,15 +120,15 @@ declare -r mirror_swap
 # Modify in-place the given variable or array expression.
 #
 
-mirror_token() {
+__getlongopts_mirror_token() {
     local ___mtoken=${!1} ___mt_i ___mt_char ___mt_ep ___mt_es
-    [[ $___mtoken != *[$mirror_pairs]* ]] && return 0  # nothing to change
-    ___mt_ep=${___mtoken%%[!"$mirror_pairs"#]*}
+    [[ $___mtoken != *[$__getlongopts_mirror_pairs]* ]] && return 0  # nothing to change
+    ___mt_ep=${___mtoken%%[!"$__getlongopts_mirror_pairs"#]*}
     ___mtoken=${___mtoken#"$___mt_ep"}
-    ___mt_es=${___mtoken##*[!"$mirror_pairs"]}
+    ___mt_es=${___mtoken##*[!"$__getlongopts_mirror_pairs"]}
     ___mtoken=${___mtoken%"$___mt_es"}
-    for (( ___mt_i = ${#___mt_ep}-1 ; ___mt_i >= 0 ; --___mt_i )) do ___mt_char=${___mt_ep:___mt_i:1} ___mtoken=$___mtoken${mirror_swap[$___mt_char]-$___mt_char} ; done
-    for (( ___mt_i = 0 ; ___mt_i <= ${#___mt_es}-1 ; ++___mt_i )) do ___mt_char=${___mt_es:___mt_i:1} ___mtoken=${mirror_swap[$___mt_char]-$___mt_char}$___mtoken ; done
+    for (( ___mt_i = ${#___mt_ep}-1 ; ___mt_i >= 0 ; --___mt_i )) do ___mt_char=${___mt_ep:___mt_i:1} ___mtoken=$___mtoken${__getlongopts_mirror_swap[$___mt_char]-$___mt_char} ; done
+    for (( ___mt_i = 0 ; ___mt_i <= ${#___mt_es}-1 ; ++___mt_i )) do ___mt_char=${___mt_es:___mt_i:1} ___mtoken=${__getlongopts_mirror_swap[$___mt_char]-$___mt_char}$___mtoken ; done
     printf -v $1 %s "$___mtoken"
 }
 
@@ -158,6 +168,7 @@ getlongopts() {
         ((++opt_num))
 
         IFS=, read -r -a names <<<"$name"
+        name=${names[0]}
 
         local -i argmode=UNSPEC
         local -i declmode=UNSPEC
