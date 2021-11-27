@@ -89,15 +89,23 @@ require cluck
 #
 #
 
-declare -ri true=1 false=0 #yes=1 no=0 YES=1 NO=0
-declare -ri UNSPEC=0 FORBIDDEN=1 OPTIONAL=2 REQUIRED=3
+for c in true=1 false=0 \
+         UNSPEC=0 FORBIDDEN=1 OPTIONAL=2 REQUIRED=3 \
+       # yes=1 no=0 YES=1 NO=0 \
 
-declare -r __getlongopts_mirror_pairs='()<>[]{}«»'
-declare -A __getlongopts_mirror_swap=()
-for ((___mt_i=0, l=${#__getlongopts_mirror_pairs};___mt_i<l;++___mt_i)) do
-    __getlongopts_mirror_swap[${__getlongopts_mirror_pairs:___mt_i:1}]=${__getlongopts_mirror_pairs:___mt_i^1:1}
+do
+    [[ -v ${c%%=*} ]] && (( ${c%%=*} == ${c#*=} )) && continue
+    declare -ri "$c"
 done
-declare -r __getlongopts_mirror_swap
+
+[[ -v __getlongopts_mirror_pairs ]] || {
+    declare -r __getlongopts_mirror_pairs='()<>[]{}«»'
+    declare -A __getlongopts_mirror_swap=()
+    for ((___mt_i=0, l=${#__getlongopts_mirror_pairs};___mt_i<l;++___mt_i)) do
+        __getlongopts_mirror_swap[${__getlongopts_mirror_pairs:___mt_i:1}]=${__getlongopts_mirror_pairs:___mt_i^1:1}
+    done
+    declare -r __getlongopts_mirror_swap
+}
 
 #
 ## __getlongopts_mirror_token
