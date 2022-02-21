@@ -4,26 +4,44 @@ ip() {
     local i warn_about_oneline=1 w
     for (( i=1 ; i<=$# ; i++ )) do
         w=${!i}
-        # stop at end of options
-        [[ $w = -* ]] || break
-        # skip parameter to '--family' option
-        [[ $w = -F ]] ||
-        [[ $w =  "-f"* &&  "-family" = "$w"* ]] ||
-        [[ $w = "--f"* && "--family" = "$w"* ]] &&
-        ((++i))
-        # don't give warning if '--online' option present on command-line
-        [[ ( $w =  "-o"* &&  "-oneline" = "$w"* ) ||
-           ( $w = "--o"* && "--oneline" = "$w"* ) ]] && warn_about_oneline=0
+        case $w in
+          -F) ((++i)) ;; # skip parameter to '-F' option
+          -?(-)f* )
+            # skip parameter to '--family' option
+            [[ "-family" = "$w"* ||
+              "--family" = "$w"* ]] &&
+                ((++i)) ;;
+          -o* | --o* )
+            # don't complain if '-o' or '--online' option present on command-line
+            [[  "-oneline" = "$w"* ||
+               "--oneline" = "$w"* ]] && warn_about_oneline=0 ;;
+          -*) ;;        # more options?
+          *) break ;;   # stop at end of options
+        esac
     done
     if ((warn_about_oneline)) &&
         [[ addr = "$w"* ||
            link = "$w"* ||
            maddr = "$w"* ]]
     then
-        echo >&2 "You forgot the '-o' flag"
-        return 99
-        echo >&2 "# using 'ip -o ...'"
-        set -- -o "$@"
+        for (( ++i ; i<=$# ; i++ )) do
+            w=${!i}
+            # don't give warning if setting something
+            [[ $w = @(set|add|rem|remove|help) ]] && warn_about_oneline=0
+        done
+        if ((warn_about_oneline))
+        then
+            if [[ -t 1 ]]
+            then
+                # Not in a pipeline, stop and recommend replacement
+                gitwarn --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@";
+                return 99
+            else
+                # In pipeline, run anyway
+                echo >&2 "# using 'ip -o ...'"
+                set -- -o "$@"
+            fi
+        fi
     fi
     command ip "$@"
 }
