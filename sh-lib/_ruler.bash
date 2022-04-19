@@ -6,11 +6,6 @@ function _ruler {
     local R
     printf -v R '%*s' $w -
     R=${R//?/-}
-#   local R=- T= 
-#   for ((; w>0 ; w/=2 )) do
-#       (( w&1 )) && R="$R$T"
-#       T="$T$T"
-#   done
     (( $# )) &&
         case $1 in
             -c | --clear)   printf '\ec' ;;
