@@ -52,10 +52,10 @@ EOM
             (--always)                  if_dir=false if_file=false if_link=false if_notlink=false if_exist=false ;;
             (--dot=[A-Z]*)              dot=${arg#*=} ;;
             (--empty=[A-Z]*)            dot=-${arg#*=} ;;
-            (--if-dir | -d)             if_dir=true ;;
+            (--if-dir | -d)             if_dir=true if_exist=false ;;
             (--if-exists | -e)          if_exist=true ;;
-            (--if-file | -f)            if_file=true ;;
-            (--if-link | -l)            if_link=true if_notlink=false ;;
+            (--if-file | -f)            if_file=true if_exist=false ;;
+            (--if-link | -l)            if_link=true if_exist=false if_notlink=false ;;
             (--if-not-link | -h)        if_notlink=true if_link=false ;;
             (--move|--move=FORCE)       move=all ;;
             (--move-if-@(abs|rel))      move=${arg##*[=-]} ;;
