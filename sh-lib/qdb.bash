@@ -21,7 +21,7 @@ qdb() {
               printf("QDB_d7_user=%s\n",   $d["username"]);
               printf("QDB_d7_pass=%s\n",   $d["password"]);
         '
-        php="$( ssh -T quakers.nz "php -r '$php'" )" &&
+        php="$( ssh -nT quakers.nz "php -r '$php'" )" &&
          eval "$php" &&
           printf '%s' "$QDB_d7_pass" >| "$QDB_d7_passfile.new~$$~" &&
            chmod 400 "$QDB_d7_passfile.new~$$~" &&
@@ -75,7 +75,7 @@ qdb6() {
               $d = $db_url["default"];
               printf("QDB_d6_url=%s\n", $d);
         '
-        php="$( ssh -T quaker.org.nz "php -r '$php'" )" &&
+        php="$( ssh -nT quaker.org.nz "php -r '$php'" )" &&
          eval "$php" && {
            QDB_d6_dbtype=${QDB_d6_url%%://*}  QDB_d6_url=${QDB_d6_url#*://}
            QDB_d6_dbname=${QDB_d6_url##*/}    QDB_d6_url=${QDB_d6_url%/*}
