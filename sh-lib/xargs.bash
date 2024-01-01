@@ -20,4 +20,4 @@ xargs() {
 _provides xargs
 
 # self-aliasing so that tab-completion defaults to 'complete -c'
-alias xargs='xargs '
+builtin alias xargs='xargs '
