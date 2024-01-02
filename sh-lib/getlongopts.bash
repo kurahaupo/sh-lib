@@ -154,6 +154,12 @@ getlongopts() {
     local -a  opt_target=()      # function to call when opt is recognized
     local -a  opt_value=()
 
+    if [[ -t 0 ]]
+    then
+        printf >&2 '\e[1;33;41mWARNING\e[m: getlongopts must be called with a here-doc as its stdin\n'
+        return 64
+    fi
+
     while IFS= read -r line
     do
         [[ $line = '#'* || -z $line ]] && continue
