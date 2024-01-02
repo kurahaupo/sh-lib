@@ -94,7 +94,10 @@ for c in true=1 false=0 \
        # yes=1 no=0 YES=1 NO=0 \
 
 do
-    [[ -v ${c%%=*} ]] && (( ${c%%=*} == ${c#*=} )) && continue
+    declare <>/dev/null >&0 2>&1 -p ${c%%=*} &&
+     (( ${c%%=*} == ${c#*=} )) &&
+      continue
+
     declare -ri "$c"
 done
 
