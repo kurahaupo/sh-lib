@@ -182,7 +182,7 @@ function autoload {
             # Was given just a function name
             eval "
                 function $_r {
-                    require $_r &&
+                    require --reload $_r &&
                     $_r$_h \"\$@\"
                 }
             "
@@ -191,7 +191,7 @@ function autoload {
             printf -v _p %q "$_p"   # undo eval
             eval "
                 function $_r {
-                    require -p $_p $_r &&
+                    require --reload -path=$_p $_r &&
                     $_r$_h \"\$@\"
                 }
             "
@@ -213,9 +213,9 @@ _provides autoload
 # prepended to BASH_ARGC and BASH_ARGV is unchanged.)
 if [[ -n "$*" ]] && ! (
     shopt -s extdebug
-    (( BASH_ARGC[0] == 1 )) && [[ ${BASH_ARGV[0]} == ${BASH_SOURCE[0]} ]] ||
-    (( BASH_ARGC[0] == 0 )) # in case this gets fixed sometime
+    (( BASH_ARGC[0] == 1 )) && [[ ${BASH_ARGV[0]} = "${BASH_SOURCE[0]}" ]] ||
+    (( BASH_ARGC[0] == 0 && ${#BASH_ARGC[@]} > 0 )) # in case this gets fixed sometime
    )
 then
-    autoload -- "$@"
+    autoload "$@"
 fi
