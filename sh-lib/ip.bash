@@ -11,8 +11,8 @@ ip() {
             [[ "-family" = "$w"* ||
               "--family" = "$w"* ]] &&
                 ((++i)) ;;
-          -o* | --o* )
-            # don't complain if '-o' or '--online' option present on command-line
+          -[jo]* | --[jo]* )
+            # don't complain if '-o' or '--online' or '-j' or '--json' option present on command-line
             [[  "-oneline" = "$w"* ||
                "--oneline" = "$w"* ]] && warn_about_oneline=0 ;;
           -*) ;;        # more options?
@@ -27,7 +27,7 @@ ip() {
         for (( ++i ; i<=$# ; i++ )) do
             w=${!i}
             # don't give warning if setting something
-            [[ $w = @(set|add|rem|remove|help) ]] && warn_about_oneline=0
+            [[ $w = @(set|add|del|delete|flush|help) ]] && warn_about_oneline=0
         done
         if ((warn_about_oneline))
         then
