@@ -1,5 +1,5 @@
 
-function die {
+function dief {
     original_status=$?
     (( __DIE_DEBUG )) || set +x
 
@@ -44,5 +44,9 @@ function die {
 
     exit $((exit_code))
 }
+die() {
+    dief "$1" '%s' "${*:2}"
+}
 
 _provides die
+_provides dief
