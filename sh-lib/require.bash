@@ -177,7 +177,7 @@ function autoload {
         (carp|cluck|croak|confess) _h=' -h' ;;  # omit the autoloader function from stack trace
         esac
         unalias 2>/dev/null "$_r"
-        if [[ $p = $r ]]
+        if [[ $p = "$r" ]]
         then
             # Was given just a function name
             eval "
@@ -191,7 +191,7 @@ function autoload {
             printf -v _p %q "$_p"   # undo eval
             eval "
                 function $_r {
-                    require --reload -path=$_p $_r &&
+                    require --reload --path=\"$_p\" $_r &&
                     $_r$_h \"\$@\"
                 }
             "
@@ -217,5 +217,5 @@ if [[ -n "$*" ]] && ! (
     (( BASH_ARGC[0] == 0 && ${#BASH_ARGC[@]} > 0 )) # in case this gets fixed sometime
    )
 then
-    autoload "$@"
+    autoload -- "$@"
 fi
