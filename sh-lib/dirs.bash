@@ -7,7 +7,7 @@
 # enabled
 # - highlight current directory
 # - for dirs, skip this when showing first part (which is $PWD)
-# 
+#
 # Then check for any user's home directory:
 # - if not under any home, part 1 & user will be empty
 # - if under own home, part 1 is empty, and "user" is "~"
@@ -22,10 +22,10 @@
 #
 
     _=${__np_cc_relative=$'\e[38;5;10m'}
-     _=${__np_cc_dnszone=$'\e[38;5;14m'}    
+     _=${__np_cc_dnszone=$'\e[38;5;14m'}
         _=${__np_cc_host=$'\e[38;5;13m'}
  _=${__np_cc_leadingpath=$'\e[38;5;8m'}    # parent of a home directory, a zonefile, a logfile, etc
-      _=${__np_cc_logdir=$'\e[38;5;14m'}     
+      _=${__np_cc_logdir=$'\e[38;5;14m'}
 #   _=${__np_cc_non_home=$'\e[38;5;129m'}  # anything in /home or /serve/users that is NOT a user's home dir
         _=${__np_cc_root=$'\e[38;5;11m'}
    _=${__np_cc_user_home=$'\e[38;5;11m'}
@@ -57,11 +57,12 @@ _nice_path() {
     /)
         #: $'\e[m' M1 special exceptions for whole paths
         printf '%s/%s\n' "$__np_cc_root" "$__np_cc_reset"
-        return
+        return 0
         ;;
     esac
 
     # Print leading matching portion as plain or with a specified colour
+    command -v __np_p0 >/dev/null ||
     __np_p0() {
         local x=${d%"${d##${1:-*}}"} c=$2
         [[ -n $x ]] ||
@@ -76,6 +77,7 @@ _nice_path() {
 
     # Print the leading matching portion, using the "cwd" colour up until the
     # end of $PWD, then the remainder as plain or with a specified colour
+    command -v __np_p1 >/dev/null ||
     __np_p1() {
         local x=${d%"${d##${1:-*}}"} c=$2
         [[ -n $x ]] || {
@@ -132,7 +134,6 @@ _nice_path() {
     /)
         #: $'\e[m' M1 special exceptions for whole paths
         __np_p1 '*' "$__np_cc_root"
-        unset -f __np_p1 __np_p0
         ((rc)) && printf %s "$__np_cc_reset"
         printf '\n'
         return
@@ -207,7 +208,6 @@ _nice_path() {
     d=${d%/}
 
     __np_p1 '*'
-    unset -f __np_p1 __np_p0
     ((rc)) && printf %s "$__np_cc_reset"
     printf '\n'
 }
