@@ -49,78 +49,81 @@
 #   bubble sort;
 #   selection sort;
 #   heap sort; and
-#   quicksort (though the remainder will be partially sorted as well)
+#   quick-sort (though the remainder will be partially sorted as well)
 # Other types of sort may not benefit.
 #
 
 ################################################################################
 
 # Can't make locals using a function, so need an alias to mangle the parsing
-alias ___sort_init='
-    local -n ___array="$1" ;
-    local ___comparator="$2" ;
-    local ___start="$3" ;
-    local ___count="$4" ;
-    local ___n="${#___array[@]}" ;
-    local -n ___sidemap="${5:-${1}___incremental_sort_sidemap___}"
-    local ___nearer_tail
-    __sort_setup '
+builtin alias _sort_init='
+    local -n _sort_array="$1" ;
+    local _sort_comparator="$2" ;
+    local _sort_count="$3" ;
+    local _sort_start="$4" ;
+    local _sort_n="${#_sort_array[@]}" ;
+    local -n _sort_sidemap="${5:-${1}_sort_incremental_sidemap___}"
+    local _sort_nearer_tail
+    __sort_init2 '  # ⇐⇐⇐ expects "$@" to be here
 
-__sort_setup() {
+__sort_init2() {    # double-underscore because it must persist
     # Force the sidemap array into existence
-    ___sidemap+=()
+    _sort_sidemap+=()
 
     # Normalize the request range.
     # Initialize the sidemap if both start & count are missing, empty, or ‘-’.
-    if [[ -z ${___start#-} ]] ; then
-        if [[ -z ${___count#-} ]] ; then
+    if [[ -z ${_sort_start#-} ]] ; then
+        if [[ -z ${_sort_count#-} ]] ; then
             # Init mode
-            ___sidemap=()
-            (( ___start = 0, ___count = ___n ))
-        elif (( ___count < 0 )) ; then
-            (( ___start=___count ))
+            _sort_sidemap=()
+            (( _sort_start = 0, _sort_count = _sort_n ))
+        elif (( _sort_count < 0 )) ; then
+            (( _sort_start=_sort_count ))
         else
-            (( ___start=0 ))
+            (( _sort_start=0 ))
         fi
     fi
 
     # Nearer to start/left or end/right of array?
-    (( ___nearer_tail = ( ___n-___start < ___start+___count )))
+    (( _sort_nearer_tail = ( _sort_n-_sort_start < _sort_start+_sort_count )))
 
     # Customize the comparator
-    case $___comparator in
-      -N|--numeric)   ___comparator='(( 10#$1 < 10#$2 ))' ;;
-      -S|--string|'') ___comparator='[[ \$1 < \$2 ]]'     ;;
-      ___sort*)       ___comparator="$( declare -pf "$___comparator" | tail -n +2 )" ;;
+    case $_sort_comparator in
+      -N|--numeric)   _sort_comparator='(( 10#$1 < 10#$2 ))' ;;
+      -S|--string|'') _sort_comparator='[[ $1 < $2 ]]'       ;;
+      __sort*)        _sort_comparator="$( declare -pf "$_sort_comparator" | tail -n +2 )" ;;
     esac
 
-    # Define the comparison function ___sorts_before
+    # Define the comparison function _sort_before
     # (define a verbose debugging version if required)
-    if ((___sort_debug))
+    if ((_sort_debug))
     then
-        ___sorts_before() {
+        _sort_before() {
             printf 'COMPARING "%s" WITH "%s" ... ' "$1" "$2"
-            if ___sorts_before2 "$1" "$2"
+            if _sort_before2 "$1" "$2"
             then
                 printf 'LESS (%#x)\n' $?
                 return 0
             else
-                local ___e=$?
-                if ___sorts_before2 "$2" "$1"
-                then printf 'MORE (%#x,%#x)\n' $___e $?
-                else printf 'SAME (%#x,%#x)\n' $___e $?
+                local _sort_e=$?
+                if _sort_before2 "$2" "$1"
+                then printf 'MORE (%#x,%#x)\n' $_sort_e $?
+                else printf 'SAME (%#x,%#x)\n' $_sort_e $?
                 fi
-                return $___e
+                return $_sort_e
             fi
         }
-        eval "___sorts_before2() { $___comparator ; }"
+        eval "_sort_before2() { $_sort_comparator ; }"
     else
-        eval  "___sorts_before() { $___comparator ; }"
+        eval  "_sort_before() { $_sort_comparator ; }"
     fi
 
     # Arrange for cleanup once the sort is complete
-    ___sort_cleanup() {
-        unset -f ___sort'*'
+    _sort_cleanup() {
+        unset -f _sort_before \
+                 _sort_before2 \
+                 _sort_part \
+                 _sort_cleanup 2> /dev/null
     }
 }
 
@@ -128,123 +131,123 @@ __sort_setup() {
 # bubble-sort
 
 bsort_array() {
-    ___sort_init "$@"
-    local ___i ___j ___k ___x
-    for ((___i=0;___i<___n;___i++)) do
-        for ((___k=___i, ___j=___i+1;___j<___n;___j++)) do
-            ___sorts_before "${___array[___k]}" "${___array[___j]}" || (( ___k=___j ))
+    _sort_init "$@"
+    local _sort_i _sort_j _sort_k _sort_x
+    for ((_sort_i=0;_sort_i<_sort_n;_sort_i++)) do
+        for ((_sort_k=_sort_i, _sort_j=_sort_i+1;_sort_j<_sort_n;_sort_j++)) do
+            _sort_before "${_sort_array[_sort_k]}" "${_sort_array[_sort_j]}" || (( _sort_k=_sort_j ))
         done
-        if (( ___k != ___i )) ; then
-            ___x="${___array[$___i]}"
-            ___array[$___i]="${___array[$___k]}"
-            ___array[$___k]="$___x"
+        if (( _sort_k != _sort_i )) ; then
+            _sort_x="${_sort_array[$_sort_i]}"
+            _sort_array[$_sort_i]="${_sort_array[$_sort_k]}"
+            _sort_array[$_sort_k]="$_sort_x"
         fi
     done
-    ___sort_cleanup
+    _sort_cleanup
 }
 
 ################################################################################
 # recursive quick-sort
 rqsort_array() {
-    ___sort_init "$@"
-    local ___i ___j ___x
-    #eval "___sorts_before() { ${2:-string}; }"
-    ___part() {
-        local ___l=$1 ___r=$2 ___p=$2
-        ((___l==___r)) && return
-        ___i=$___l ___j=$___r
-        ___p=$___r
-        if  ((___l+1<___p)) &&
-            ___sorts_before "${___array[___l+1]}" "${___array[___r]}"
+    _sort_init "$@"
+    local _sort_i _sort_j _sort_x
+    #eval "_sort_before() { ${2:-string}; }"
+    _sort_part() {
+        local _sort_l=$1 _sort_r=$2 _sort_p=$2
+        ((_sort_l==_sort_r)) && return
+        _sort_i=$_sort_l _sort_j=$_sort_r
+        _sort_p=$_sort_r
+        if  ((_sort_l+1<_sort_p)) &&
+            _sort_before "${_sort_array[_sort_l+1]}" "${_sort_array[_sort_r]}"
         then
-            ___p=$((___l+1))
+            _sort_p=$((_sort_l+1))
         fi
         while
             while
-                ((___i<___p)) &&
-                ___sorts_before "${___array[___i]}" "${___array[___p]}"
+                ((_sort_i<_sort_p)) &&
+                _sort_before "${_sort_array[_sort_i]}" "${_sort_array[_sort_p]}"
             do
-                ((++___i))
+                ((++_sort_i))
             done
             while
-                ((___j>___p)) &&
-                ! ___sorts_before "${___array[___j]}" "${___array[___p]}"
+                ((_sort_j>_sort_p)) &&
+                ! _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_p]}"
             do
-                ((--___j))
+                ((--_sort_j))
             done
-            ((___i<___j))
+            ((_sort_i<_sort_j))
         do
-            ___x="${___array[$___i]}"
-            ___array[$___i]="${___array[$___j]}"
-            ___array[$___j]="$___x"
-            if ((___i==___p))
-            then ___p=$___j
-            elif ((___j==___p))
-            then ___p=$___i
+            _sort_x="${_sort_array[$_sort_i]}"
+            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
+            _sort_array[$_sort_j]="$_sort_x"
+            if ((_sort_i==_sort_p))
+            then _sort_p=$_sort_j
+            elif ((_sort_j==_sort_p))
+            then _sort_p=$_sort_i
             fi
         done
-        ___part $___l $((___p-1))
-        ___part $((___p+1)) $___r
+        _sort_part $_sort_l $((_sort_p-1))
+        _sort_part $((_sort_p+1)) $_sort_r
     }
-    ___part 0 $___n
-    ___sort_cleanup
+    _sort_part 0 $_sort_n
+    _sort_cleanup
 }
 
 ################################################################################
 # nonrecursive quick-sort
 qsort_array() {
-    ___sort_init "$@"
-    local ___i ___j ___l ___p ___r ___x
-    (( ${#___sidemap[@]} == 0 )) &&
-        ___sidemap=( - 0,$((___n-1)) )
-    while ((${#___sidemap[@]} > 1 ))
+    _sort_init "$@"
+    local _sort_i _sort_j _sort_l _sort_p _sort_r _sort_x
+    (( ${#_sort_sidemap[@]} == 0 )) &&
+        _sort_sidemap=( - 0,$((_sort_n-1)) )
+    while ((${#_sort_sidemap[@]} > 1 ))
     do
-        ___p=${___sidemap[-1]}
-        ___l=${___p%,*}
-        ___r=${___p#*,}
+        _sort_p=${_sort_sidemap[-1]}
+        _sort_l=${_sort_p%,*}
+        _sort_r=${_sort_p#*,}
         # Can stop early when everything in the target range is sorted
-        (( ___nearer_tail ? ___r >= ___n-___count : ___l < ___start+___count )) || break
-        unset ___sidemap[-1]
-        ((___l < ___r)) || continue
-        ___i=$___l ___j=$___r
-        ___p=$___r
-        if  ((___l+1<___p)) &&
-            ___sorts_before "${___array[___l+1]}" "${___array[___r]}"
+        (( _sort_nearer_tail ? _sort_r >= _sort_n-_sort_count : _sort_l < _sort_start+_sort_count )) || break
+        unset _sort_sidemap[-1]
+        ((_sort_l < _sort_r)) || continue
+        _sort_i=$_sort_l _sort_j=$_sort_r
+        _sort_p=$_sort_r
+        if  ((_sort_l+1<_sort_p)) &&
+            _sort_before "${_sort_array[_sort_l+1]}" "${_sort_array[_sort_r]}"
         then
-            ___p=$((___l+1))
+            _sort_p=$((_sort_l+1))
         fi
         while
             while
-                ((___i<___p)) &&
-                ___sorts_before "${___array[___i]}" "${___array[___p]}"
+                ((_sort_i<_sort_p)) &&
+                _sort_before "${_sort_array[_sort_i]}" "${_sort_array[_sort_p]}"
             do
-                ((++___i))
+                ((++_sort_i))
             done
             while
-                ((___j>___p)) &&
-                ! ___sorts_before "${___array[___j]}" "${___array[___p]}"
+                ((_sort_j>_sort_p)) &&
+                ! _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_p]}"
             do
-                ((--___j))
+                ((--_sort_j))
             done
-            ((___i<___j))
+            ((_sort_i<_sort_j))
         do
-            ___x="${___array[$___i]}"
-            ___array[$___i]="${___array[$___j]}"
-            ___array[$___j]="$___x"
-            if ((___i==___p))
-            then ___p=$___j
-            elif ((___j==___p))
-            then ___p=$___i
+            _sort_x="${_sort_array[$_sort_i]}"
+            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
+            _sort_array[$_sort_j]="$_sort_x"
+            if ((_sort_i==_sort_p))
+            then _sort_p=$_sort_j
+            elif ((_sort_j==_sort_p))
+            then _sort_p=$_sort_i
             fi
         done
         # sub-sort the left or right half next, depending on whether the
         # target subrange is nearer the left or right end of the array.
-        if ((___nearer_tail))
-        then ___sidemap+=( $___l,$((___p-1)) $((___p+1)),$___r )
-        else ___sidemap+=( $((___p+1)),$___r $___l,$((___p-1)) )
+        if ((_sort_nearer_tail))
+        then _sort_sidemap+=( $_sort_l,$((_sort_p-1)) $((_sort_p+1)),$_sort_r )
+        else _sort_sidemap+=( $((_sort_p+1)),$_sort_r $_sort_l,$((_sort_p-1)) )
         fi
     done
-    ___sort_cleanup
+    _sort_cleanup
 }
 
 ################################################################################
@@ -252,28 +255,28 @@ qsort_array() {
 # note comparison inversion: keep the ‘biggest’ at the front, so that it will
 # be put at the tail end of the extraction array
 hsort_array() {
-    local -n ___array=$1
-    local ___n=${#___array[@]} ___i ___j ___m ___x
-    ___sort_init "$@"
-    for ((___m=1;___m<___n;++___m)) do
-        ___x="${___array[$___m]}"
-        for ((___i=___m;(___j=(___i-1)>>1)>=0;___i=___j)) do
-            ___sorts_before "$___x" "${___array[___j]}" && break
-            ___array[$___i]="${___array[$___j]}"
+    local -n _sort_array=$1
+    local _sort_n=${#_sort_array[@]} _sort_i _sort_j _sort_m _sort_x
+    _sort_init "$@"
+    for ((_sort_m=1;_sort_m<_sort_n;++_sort_m)) do
+        _sort_x="${_sort_array[$_sort_m]}"
+        for ((_sort_i=_sort_m;(_sort_j=(_sort_i-1)>>1)>=0;_sort_i=_sort_j)) do
+            _sort_before "$_sort_x" "${_sort_array[_sort_j]}" && break
+            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
         done
-        ___array[$___i]="$___x"
+        _sort_array[$_sort_i]="$_sort_x"
     done
-    for ((;--___m>0;)) do
-        ___x="${___array[___m]}"
-        ___array[___m]="${___array[0]}"
-        for ((___i=0;(___j=(___i<<1)+1)<___m-1;___i=___j)) do
-            ((___j+1<___m)) && ___sorts_before "${___array[___j]}" "${___array[___j+1]}" && ((++___j))
-            ___sorts_before "${___array[___j]}" "${___x}" && break
-            ___array[$___i]="${___array[$___j]}"
+    for ((;--_sort_m>0;)) do
+        _sort_x="${_sort_array[_sort_m]}"
+        _sort_array[_sort_m]="${_sort_array[0]}"
+        for ((_sort_i=0;(_sort_j=(_sort_i<<1)+1)<_sort_m-1;_sort_i=_sort_j)) do
+            ((_sort_j+1<_sort_m)) && _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_j+1]}" && ((++_sort_j))
+            _sort_before "${_sort_array[_sort_j]}" "${_sort_x}" && break
+            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
         done
-        ___array[___i]="$___x"
+        _sort_array[_sort_i]="$_sort_x"
     done
-    ___sort_cleanup
+    _sort_cleanup
 }
 
 ################################################################################
@@ -285,57 +288,57 @@ hsort_array() {
 #
 # The array will truncated to the head size after sorting.
 
-#((___sort_debug=1))
+#((_sort_debug=1))
 
 hhsort_array() {
     die 99 UNIMPLEMENTED
-#   local -n ___array=$1
-#   local ___n=${#___array[@]} ___i ___j ___m ___x
-#   local ___h=$3
-#   ___sort_init "$@"
-# # ((___sort_debug)) && {
+#   local -n _sort_array=$1
+#   local _sort_n=${#_sort_array[@]} _sort_i _sort_j _sort_m _sort_x
+#   local _sort_h=$3
+#   _sort_init "$@"
+# # ((_sort_debug)) && {
 # #     printf 'START SORT\n'
 # #     declare -p $1
 # #     printf '\nSTART BUILDING HEAP\n'
 # # }
-#   for ((___m=1;___m<___n;++___m)) do
-# #     ((___sort_debug)) && printf 'SINK %u "%s"\n' $___m "${___array[___m]}"
-#       ___x="${___array[$___m]}"
-#       for ((___i=___m;(___j=(___i-1)>>1)>=0;___i=___j)) do
-# #         ((___sort_debug)) && printf 'COMPARE DOWN %u %u\n' $___i $___j
-#           ___sorts_before "$___x" "${___array[___j]}" && break
-# #         ((___sort_debug)) && printf 'MOVE %u "%s" UP TO %u\n' $___j "${___array[___j]}" $___i
-#           ___array[$___i]="${___array[$___j]}"
+#   for ((_sort_m=1;_sort_m<_sort_n;++_sort_m)) do
+# #     ((_sort_debug)) && printf 'SINK %u "%s"\n' $_sort_m "${_sort_array[_sort_m]}"
+#       _sort_x="${_sort_array[$_sort_m]}"
+#       for ((_sort_i=_sort_m;(_sort_j=(_sort_i-1)>>1)>=0;_sort_i=_sort_j)) do
+# #         ((_sort_debug)) && printf 'COMPARE DOWN %u %u\n' $_sort_i $_sort_j
+#           _sort_before "$_sort_x" "${_sort_array[_sort_j]}" && break
+# #         ((_sort_debug)) && printf 'MOVE %u "%s" UP TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
+#           _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
 #       done
-#       ___array[$___i]="$___x"
-# #     ((___sort_debug)) && printf 'SUNK FROM %u TO %u "%s"\n\n' $___m $___i "$___x"
+#       _sort_array[$_sort_i]="$_sort_x"
+# #     ((_sort_debug)) && printf 'SUNK FROM %u TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
 #   done
-# # ((___sort_debug)) && {
+# # ((_sort_debug)) && {
 # #     printf 'FINISHED BUILDING HEAP\n'
-# #     declare -p $1 ___m
+# #     declare -p $1 _sort_m
 # #     printf '\nSTART EXTRACTING\n'
 # # }
-#   for ((;--___m>0;)) do
-# #     ((___sort_debug)) && printf 'SWAP %u "%s" WITH ROOT "%s" (AND THEN RAISE)\n' $___m "${___array[___m]}" "${___array[0]}"
-#       ___x="${___array[___m]}"
-#       ___array[___m]="${___array[0]}"
-#       for ((___i=0;(___j=(___i<<1)+1)<___m-1;___i=___j)) do
-# #         ((___sort_debug && ___j+1<___m)) && printf 'COMPARE SIBLINGS %u %u\n' $___j $((___j+1))
-#           ((___j+1<___m)) && ___sorts_before "${___array[___j]}" "${___array[___j+1]}" && ((++___j))
-# #         ((___sort_debug)) && printf 'COMPARE %u "%s" AND ROOT "%s"\n' $___j "${___array[___j]}" "$___x"
-#           ___sorts_before "${___array[___j]}" "${___x}" && break
-# #         ((___sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $___j "${___array[___j]}" $___i
-#           ___array[$___i]="${___array[$___j]}"
+#   for ((;--_sort_m>0;)) do
+# #     ((_sort_debug)) && printf 'SWAP %u "%s" WITH ROOT "%s" (AND THEN RAISE)\n' $_sort_m "${_sort_array[_sort_m]}" "${_sort_array[0]}"
+#       _sort_x="${_sort_array[_sort_m]}"
+#       _sort_array[_sort_m]="${_sort_array[0]}"
+#       for ((_sort_i=0;(_sort_j=(_sort_i<<1)+1)<_sort_m-1;_sort_i=_sort_j)) do
+# #         ((_sort_debug && _sort_j+1<_sort_m)) && printf 'COMPARE SIBLINGS %u %u\n' $_sort_j $((_sort_j+1))
+#           ((_sort_j+1<_sort_m)) && _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_j+1]}" && ((++_sort_j))
+# #         ((_sort_debug)) && printf 'COMPARE %u "%s" AND ROOT "%s"\n' $_sort_j "${_sort_array[_sort_j]}" "$_sort_x"
+#           _sort_before "${_sort_array[_sort_j]}" "${_sort_x}" && break
+# #         ((_sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
+#           _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
 #       done
-# #     ((___sort_debug)) && printf 'MOVE %u VIA ROOT TO %u "%s"\n\n' $___m $___i "$___x"
-#       ___array[___i]="$___x"
+# #     ((_sort_debug)) && printf 'MOVE %u VIA ROOT TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
+#       _sort_array[_sort_i]="$_sort_x"
 #   done
-# # ((___sort_debug)) && {
+# # ((_sort_debug)) && {
 # #     echo FINISHED EXTRACTING
 # #     declare -p $1
 # #     echo $'\n'FINISHED SORT
 # # }
-#   ___sort_cleanup
+#   _sort_cleanup
 }
 
 ################################################################################
@@ -405,7 +408,7 @@ sort_array() { hsort_array "$@"; }
 
 ################################################################################
 
-unalias ___sort_init
+builtin unalias _sort_init
 
 if  type -t _provides >/dev/null
 then
