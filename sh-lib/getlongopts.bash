@@ -101,7 +101,7 @@ do
     declare -ri "$c"
 done
 
-[[ -v __getlongopts_mirror_pairs ]] || {
+[[ -n ${__getlongopts_mirror_pairs+X} ]] || {
     declare -r __getlongopts_mirror_pairs='()<>[]{}«»'
     declare -A __getlongopts_mirror_swap=()
     for ((___mt_i=0, l=${#__getlongopts_mirror_pairs};___mt_i<l;++___mt_i)) do
