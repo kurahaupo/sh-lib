@@ -1,15 +1,21 @@
 #
 # Various sort algorithms applied to a Bash array variable
 #
-# Each sort function takes the name of the array to be sorted as its 1st
-# parameter.
+# Each sort function takes the same parameters in the same order:
 #
-# The optional 2nd parameter is a "less than" comparator; either
-#   --string        [[ $1 < $2 ]]           lexicographically precedes
-#   --numeric       (( 10#$1 < 10#$2 ))     numerically less than
-#   a shell function name or code fragment
+# The first parameter is the name of the array to be sorted; the remaining
+# parameters are optional.
 #
-# Defaults to "--string" if missing or empty.
+# The 2nd parameter is a "less than" comparator; either
+#   -S or --string      [[ $1 < $2 ]]           lexicographically precedes
+# or
+#   -N or --numeric     (( 10#$1 < 10#$2 ))     numerically less than
+# or
+#   a shell function name
+# or
+#   a code fragment that takes the two comparison args at the end (not recommended).
+#
+# The comparator defaults to "--string" if missing or empty.
 #
 # The shell function or fragment will be provided with two values from the
 # array as arguments.  When finished, the array (or nominated subrange) will be
@@ -18,17 +24,18 @@
 # The comparator must be transitive and stable.
 #
 # The 3rd & 4th parameters, if present, indicate the subrange to be sorted.
-# The 3rd parameter indicates the number of elements to be sorted, and defaults
-# to "until the end of the array".
-# The 4th parameter indicates the starting position; a negative value may be
-# used to indicate a position relative to the end of the array. If missing it
-# defaults to the start of the array (unless the 3rd parameter is negative, in
-# which case it counts backwards from the end of the array.
+#   * The 3rd parameter indicates the number of elements to be sorted, and
+#     defaults to "until the end of the array".
+#   * The 4th parameter indicates the starting position; a negative value may
+#     be used to indicate a position relative to the end of the array. If
+#     missing it defaults to the start of the array (unless the 3rd parameter
+#     is negative, in which case it counts backwards from the end of the array.
 #
 # The 5th parameter is used to continue an incremental sort; it should be the
 # name of an array variable.  Whether that variable is used and what it
-# contains depends on which type of sort is used.
-# It should either be
+# contains depends on which type of sort is used. (If omitted it will use an
+# obfuscated name based on the name of the array to be sorted.)
+#   * for incremental quick-sort, it contains the partition boundary positions
 #
 # Upon return, the nominated range will be correctly sorted, and if this is
 # part of an incremental sort, any previously sorted ranges will also remain
