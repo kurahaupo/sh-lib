@@ -138,9 +138,9 @@ bsort_array() {
             _sort_before "${_sort_array[_sort_k]}" "${_sort_array[_sort_j]}" || (( _sort_k=_sort_j ))
         done
         if (( _sort_k != _sort_i )) ; then
-            _sort_x="${_sort_array[$_sort_i]}"
-            _sort_array[$_sort_i]="${_sort_array[$_sort_k]}"
-            _sort_array[$_sort_k]="$_sort_x"
+            _sort_x="${_sort_array[_sort_i]}"
+            _sort_array[_sort_i]="${_sort_array[_sort_k]}"
+            _sort_array[_sort_k]="$_sort_x"
         fi
     done
     _sort_cleanup
@@ -177,9 +177,9 @@ rqsort_array() {
             done
             ((_sort_i<_sort_j))
         do
-            _sort_x="${_sort_array[$_sort_i]}"
-            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
-            _sort_array[$_sort_j]="$_sort_x"
+            _sort_x="${_sort_array[_sort_i]}"
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
+            _sort_array[_sort_j]="$_sort_x"
             if ((_sort_i==_sort_p))
             then _sort_p=$_sort_j
             elif ((_sort_j==_sort_p))
@@ -231,9 +231,9 @@ qsort_array() {
             done
             ((_sort_i<_sort_j))
         do
-            _sort_x="${_sort_array[$_sort_i]}"
-            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
-            _sort_array[$_sort_j]="$_sort_x"
+            _sort_x="${_sort_array[_sort_i]}"
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
+            _sort_array[_sort_j]="$_sort_x"
             if ((_sort_i==_sort_p))
             then _sort_p=$_sort_j
             elif ((_sort_j==_sort_p))
@@ -259,12 +259,12 @@ hsort_array() {
     local _sort_n=${#_sort_array[@]} _sort_i _sort_j _sort_m _sort_x
     _sort_init "$@"
     for ((_sort_m=1;_sort_m<_sort_n;++_sort_m)) do
-        _sort_x="${_sort_array[$_sort_m]}"
+        _sort_x="${_sort_array[_sort_m]}"
         for ((_sort_i=_sort_m;(_sort_j=(_sort_i-1)>>1)>=0;_sort_i=_sort_j)) do
             _sort_before "$_sort_x" "${_sort_array[_sort_j]}" && break
-            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
         done
-        _sort_array[$_sort_i]="$_sort_x"
+        _sort_array[_sort_i]="$_sort_x"
     done
     for ((;--_sort_m>0;)) do
         _sort_x="${_sort_array[_sort_m]}"
@@ -272,7 +272,7 @@ hsort_array() {
         for ((_sort_i=0;(_sort_j=(_sort_i<<1)+1)<_sort_m-1;_sort_i=_sort_j)) do
             ((_sort_j+1<_sort_m)) && _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_j+1]}" && ((++_sort_j))
             _sort_before "${_sort_array[_sort_j]}" "${_sort_x}" && break
-            _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
         done
         _sort_array[_sort_i]="$_sort_x"
     done
@@ -291,54 +291,54 @@ hsort_array() {
 #((_sort_debug=1))
 
 hhsort_array() {
-    die 99 UNIMPLEMENTED
-#   local -n _sort_array=$1
-#   local _sort_n=${#_sort_array[@]} _sort_i _sort_j _sort_m _sort_x
-#   local _sort_h=$3
-#   _sort_init "$@"
-# # ((_sort_debug)) && {
-# #     printf 'START SORT\n'
-# #     declare -p $1
-# #     printf '\nSTART BUILDING HEAP\n'
-# # }
-#   for ((_sort_m=1;_sort_m<_sort_n;++_sort_m)) do
-# #     ((_sort_debug)) && printf 'SINK %u "%s"\n' $_sort_m "${_sort_array[_sort_m]}"
-#       _sort_x="${_sort_array[$_sort_m]}"
-#       for ((_sort_i=_sort_m;(_sort_j=(_sort_i-1)>>1)>=0;_sort_i=_sort_j)) do
-# #         ((_sort_debug)) && printf 'COMPARE DOWN %u %u\n' $_sort_i $_sort_j
-#           _sort_before "$_sort_x" "${_sort_array[_sort_j]}" && break
-# #         ((_sort_debug)) && printf 'MOVE %u "%s" UP TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
-#           _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
-#       done
-#       _sort_array[$_sort_i]="$_sort_x"
-# #     ((_sort_debug)) && printf 'SUNK FROM %u TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
-#   done
-# # ((_sort_debug)) && {
-# #     printf 'FINISHED BUILDING HEAP\n'
-# #     declare -p $1 _sort_m
-# #     printf '\nSTART EXTRACTING\n'
-# # }
-#   for ((;--_sort_m>0;)) do
-# #     ((_sort_debug)) && printf 'SWAP %u "%s" WITH ROOT "%s" (AND THEN RAISE)\n' $_sort_m "${_sort_array[_sort_m]}" "${_sort_array[0]}"
-#       _sort_x="${_sort_array[_sort_m]}"
-#       _sort_array[_sort_m]="${_sort_array[0]}"
-#       for ((_sort_i=0;(_sort_j=(_sort_i<<1)+1)<_sort_m-1;_sort_i=_sort_j)) do
-# #         ((_sort_debug && _sort_j+1<_sort_m)) && printf 'COMPARE SIBLINGS %u %u\n' $_sort_j $((_sort_j+1))
-#           ((_sort_j+1<_sort_m)) && _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_j+1]}" && ((++_sort_j))
-# #         ((_sort_debug)) && printf 'COMPARE %u "%s" AND ROOT "%s"\n' $_sort_j "${_sort_array[_sort_j]}" "$_sort_x"
-#           _sort_before "${_sort_array[_sort_j]}" "${_sort_x}" && break
-# #         ((_sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
-#           _sort_array[$_sort_i]="${_sort_array[$_sort_j]}"
-#       done
-# #     ((_sort_debug)) && printf 'MOVE %u VIA ROOT TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
-#       _sort_array[_sort_i]="$_sort_x"
-#   done
-# # ((_sort_debug)) && {
-# #     echo FINISHED EXTRACTING
-# #     declare -p $1
-# #     echo $'\n'FINISHED SORT
-# # }
-#   _sort_cleanup
+#   die 99 UNIMPLEMENTED
+    local -n _sort_array=$1
+    local _sort_n=${#_sort_array[@]} _sort_i _sort_j _sort_m _sort_x
+    local _sort_h=$3
+    _sort_init "$@"
+  # ((_sort_debug)) && {
+  #     printf 'START SORT\n'
+  #     declare -p $1
+  #     printf '\nSTART BUILDING HEAP\n'
+  # }
+    for ((_sort_m=1;_sort_m<_sort_n;++_sort_m)) do
+  #     ((_sort_debug)) && printf 'SINK %u "%s"\n' $_sort_m "${_sort_array[_sort_m]}"
+        _sort_x="${_sort_array[_sort_m]}"
+        for ((_sort_i=_sort_m;(_sort_j=(_sort_i-1)>>1)>=0;_sort_i=_sort_j)) do
+  #         ((_sort_debug)) && printf 'COMPARE DOWN %u %u\n' $_sort_i $_sort_j
+            _sort_before "$_sort_x" "${_sort_array[_sort_j]}" && break
+  #         ((_sort_debug)) && printf 'MOVE %u "%s" UP TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
+        done
+        _sort_array[_sort_i]="$_sort_x"
+  #     ((_sort_debug)) && printf 'SUNK FROM %u TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
+    done
+  # ((_sort_debug)) && {
+  #     printf 'FINISHED BUILDING HEAP\n'
+  #     declare -p $1 _sort_m
+  #     printf '\nSTART EXTRACTING\n'
+  # }
+    for ((;--_sort_m>0;)) do
+  #     ((_sort_debug)) && printf 'SWAP %u "%s" WITH ROOT "%s" (AND THEN RAISE)\n' $_sort_m "${_sort_array[_sort_m]}" "${_sort_array[0]}"
+        _sort_x="${_sort_array[_sort_m]}"
+        _sort_array[_sort_m]="${_sort_array[0]}"
+        for ((_sort_i=0;(_sort_j=(_sort_i<<1)+1)<_sort_m-1;_sort_i=_sort_j)) do
+  #         ((_sort_debug && _sort_j+1<_sort_m)) && printf 'COMPARE SIBLINGS %u %u\n' $_sort_j $((_sort_j+1))
+            ((_sort_j+1<_sort_m)) && _sort_before "${_sort_array[_sort_j]}" "${_sort_array[_sort_j+1]}" && ((++_sort_j))
+  #         ((_sort_debug)) && printf 'COMPARE %u "%s" AND ROOT "%s"\n' $_sort_j "${_sort_array[_sort_j]}" "$_sort_x"
+            _sort_before "${_sort_array[_sort_j]}" "${_sort_x}" && break
+  #         ((_sort_debug)) && printf 'MOVE %u "%s" TO %u\n' $_sort_j "${_sort_array[_sort_j]}" $_sort_i
+            _sort_array[_sort_i]="${_sort_array[_sort_j]}"
+        done
+  #     ((_sort_debug)) && printf 'MOVE %u VIA ROOT TO %u "%s"\n\n' $_sort_m $_sort_i "$_sort_x"
+        _sort_array[_sort_i]="$_sort_x"
+    done
+  # ((_sort_debug)) && {
+  #     echo FINISHED EXTRACTING
+  #     declare -p $1
+  #     echo $'\n'FINISHED SORT
+  # }
+    _sort_cleanup
 }
 
 ################################################################################
