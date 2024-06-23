@@ -62,7 +62,7 @@
         [EX_FAIL]=1
         [FAIL]=1
     )
-    for ___ex_num in "${!EX_values[@]}"
+    for ___ex_num in "${!EX_names[@]}"
     do
         ___ex_symbol="${EX_names[___ex_num]}"
         EX_values[$___ex_symbol]=$___ex_num
