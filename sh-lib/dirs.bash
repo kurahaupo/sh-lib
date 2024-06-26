@@ -44,6 +44,47 @@
         _=${__np_cc_root=$'\e[38;5;11m'}
    _=${__np_cc_user_home=$'\e[38;5;11m'}
 
+# Print leading matching portion of "$d" as plain or with a specified colour;
+# then remove the portion just printed from "d".
+
+__np_p0() {
+    local x=${d%"${d##${1:-*}}"} c=$2
+    [[ -n $x ]] ||
+        return 1
+    d=${d#"$x"}
+    p=${p#"$x"}
+    printf %s%s "${c:-$__np_cc_reset}" "$x"
+    (( rc = ${#c} > 0 ))
+    (( cc -= ${#x}, cc < 0 && (cc = 0) ))
+    return 0
+}
+
+# Print the leading matching portion of "$d", using the "cwd" colour up until
+# the end of $PWD, then the remainder as plain or with a specified colour; then
+# remove the portion just printed from "d".
+
+__np_p1() {
+    local x=${d%"${d##${1:-*}}"} c=$2
+    [[ -n $x ]] || {
+        return 1
+    }
+    d=${d#"$x"}
+    if (( cc < ${#x} )); then
+        if (( cc <= 0 )); then
+            (( rc )) && [[ -z $c ]] && printf %s "$__np_cc_reset"
+            printf %s%s "$c" "$x"
+        else
+            printf '%s%s%s%s' "$__np_cc_relative" "${x:0:cc}" "${c:-$__np_cc_reset}" "${x:cc}"
+        fi
+        (( rc = ${#c} > 0 ))
+    else
+        printf '%s%s' "$__np_cc_relative" "$x"
+        (( rc = 1 ))
+    fi
+    (( cc -= ${#x}, cc < 0 && (cc = 0) ))
+    return 0
+}
+
 _nice_path() {
     local d=$1 p=$2
     local chroot=
@@ -73,45 +114,6 @@ _nice_path() {
         return 0
         ;;
     esac
-
-    # Print leading matching portion as plain or with a specified colour
-    command -v __np_p0 >/dev/null ||
-    __np_p0() {
-        local x=${d%"${d##${1:-*}}"} c=$2
-        [[ -n $x ]] ||
-            return 1
-        d=${d#"$x"}
-        p=${p#"$x"}
-        printf %s%s "${c:-$__np_cc_reset}" "$x"
-        (( rc = ${#c} > 0 ))
-        (( cc -= ${#x}, cc < 0 && (cc = 0) ))
-        return 0
-    }
-
-    # Print the leading matching portion, using the "cwd" colour up until the
-    # end of $PWD, then the remainder as plain or with a specified colour
-    command -v __np_p1 >/dev/null ||
-    __np_p1() {
-        local x=${d%"${d##${1:-*}}"} c=$2
-        [[ -n $x ]] || {
-            return 1
-        }
-        d=${d#"$x"}
-        if (( cc < ${#x} )); then
-            if (( cc <= 0 )); then
-                (( rc )) && [[ -z $c ]] && printf %s "$__np_cc_reset"
-                printf %s%s "$c" "$x"
-            else
-                printf '%s%s%s%s' "$__np_cc_relative" "${x:0:cc}" "${c:-$__np_cc_reset}" "${x:cc}"
-            fi
-            (( rc = ${#c} > 0 ))
-        else
-            printf '%s%s' "$__np_cc_relative" "$x"
-            (( rc = 1 ))
-        fi
-        (( cc -= ${#x}, cc < 0 && (cc = 0) ))
-        return 0
-    }
 
     if (( __np_relative > 0 ))
     then
