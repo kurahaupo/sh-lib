@@ -21,15 +21,28 @@
 # If no match, everything is "tail", which is always printed in "normal" text
 #
 
-    _=${__np_cc_relative=$'\e[38;5;10m'}
+[[ $1 = --reset-colours ]] &&
+    unset \
+        __np_cc_dnszone \
+        __np_cc_host \
+        __np_cc_leadingpath \
+        __np_cc_logdir \
+        __np_cc_non_home \
+        __np_cc_project \
+        __np_cc_relative \
+        __np_cc_reset \
+        __np_cc_root \
+        __np_cc_user_home
+
      _=${__np_cc_dnszone=$'\e[38;5;14m'}
         _=${__np_cc_host=$'\e[38;5;13m'}
  _=${__np_cc_leadingpath=$'\e[38;5;8m'}    # parent of a home directory, a zonefile, a logfile, etc
       _=${__np_cc_logdir=$'\e[38;5;14m'}
 #   _=${__np_cc_non_home=$'\e[38;5;129m'}  # anything in /home or /serve/users that is NOT a user's home dir
+    _=${__np_cc_relative=$'\e[38;5;10m'}
+       _=${__np_cc_reset=$'\e[39m'}
         _=${__np_cc_root=$'\e[38;5;11m'}
    _=${__np_cc_user_home=$'\e[38;5;11m'}
-       _=${__np_cc_reset=$'\e[39m'}
 
 _nice_path() {
     local d=$1 p=$2
