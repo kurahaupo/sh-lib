@@ -39,6 +39,7 @@
  _=${__np_cc_leadingpath=$'\e[38;5;8m'}    # parent of a home directory, a zonefile, a logfile, etc
       _=${__np_cc_logdir=$'\e[38;5;14m'}
 #   _=${__np_cc_non_home=$'\e[38;5;129m'}  # anything in /home or /serve/users that is NOT a user's home dir
+     _=${__np_cc_project=$'\e[38;5;198m'}
     _=${__np_cc_relative=$'\e[38;5;10m'}
        _=${__np_cc_reset=$'\e[39m'}
         _=${__np_cc_root=$'\e[38;5;11m'}
@@ -200,10 +201,10 @@ _nice_path() {
     esac
 
     case /$d in
-    */@(git|svn|rcs)/*/*)
+    */@(git|opt|rcs|svn)/*/*)
         #: $'\e[m' M6
-        __np_p1 '?(*/)@(git|svn|rcs)/' &&
-        __np_p0 '!(*/*)' "$__np_cc_host" &&
+        __np_p1 '?(*/)@(git|opt|rcs|svn)/' &&
+        __np_p0 '!(*/*)' "$__np_cc_project" &&
         __np_p1 /
         ;;
 
