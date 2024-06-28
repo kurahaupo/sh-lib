@@ -16,24 +16,24 @@
 
         # BSD sysexits.h
 
-        [0]=OK             # successful termination
-    #   [64]=_BASE         # base value for error messages
-        [64]=USAGE         # command line usage error
-        [65]=DATAERR       # data format error
-        [66]=NOINPUT       # cannot open input
-        [67]=NOUSER        # addressee unknown
-        [68]=NOHOST        # host name unknown
-        [69]=UNAVAILABLE   # service unavailable
-        [70]=SOFTWARE      # internal software error
-        [71]=OSERR         # system error (e.g., cannot fork)
-        [72]=OSFILE        # critical OS file missing
-        [73]=CANTCREAT     # cannot create (user) output file
-        [74]=IOERR         # input/output error
-        [75]=TEMPFAIL      # temp failure; user is invited to retry
-        [76]=PROTOCOL      # remote error in protocol
-        [77]=NOPERM        # permission denied
-        [78]=CONFIG        # configuration error
-    #   [78]=_MAX          # maximum listed value
+        [0]=OK              # successful termination
+    #   [64]=_BASE          # base value for error messages
+        [64]=USAGE          # command line usage error
+        [65]=DATAERR        # data format error
+        [66]=NOINPUT        # cannot open input
+        [67]=NOUSER         # addressee unknown
+        [68]=NOHOST         # host name unknown
+        [69]=UNAVAILABLE    # service unavailable
+        [70]=SOFTWARE       # internal software error
+        [71]=OSERR          # system error (e.g., cannot fork)
+        [72]=OSFILE         # critical OS file missing
+        [73]=CANTCREAT      # cannot create (user) output file
+        [74]=IOERR          # input/output error
+        [75]=TEMPFAIL       # temp failure; user is invited to retry
+        [76]=PROTOCOL       # remote error in protocol
+        [77]=NOPERM         # permission denied
+        [78]=CONFIG         # configuration error
+    #   [78]=_MAX           # maximum listed value
 
         # Local conventions
 
@@ -42,7 +42,7 @@
         [96]=BUG
         [255]=BROKEN
 
-    #   [STATUS]=$?        # NOTE: must not be defined here, but rather immediately after the relevant command
+    #   [STATUS]=$?         # NOTE: must not be defined here, but rather immediately after the relevant command
 
     )
     declare -r EX_names
