@@ -51,14 +51,19 @@
 (( BASH_VERSINFO[0] >= 4 && ${#EX_values[@]} == 0 )) && {
     declare -A EX_values=(
 
-        # POSIX/C stdlib.h
+        # POSIX/C stdlib.h numeric overlap
         [EXIT_SUCCESS]=0
+        [SUCCESS]=0
         [EXIT_FAILURE]=1
+        [FAILURE]=1
+
+        # BSD sysexits.h numeric overlap
+        [EX_OK]=0
+        [OK]=0
 
         # Local conventions
-        [EX_OK]=0
+        [EX_PASS]=0
         [PASS]=0
-        [OK]=0
         [EX_FAIL]=1
         [FAIL]=1
     )
