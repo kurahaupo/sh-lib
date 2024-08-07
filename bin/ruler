@@ -1,16 +1,40 @@
+#!/bin/bash
+
+exec 3>&1 4>/dev/null
+
+##
+true=1 false=0
 function _ruler {
-    local w=$COLUMNS
-    [[ $w ]] ||
-        read _ w _ < <( stty size ) ||
-        w=80
-    local R
-    printf -v R '%*s' $w -
-    R=${R//?/-}
-    (( $# )) &&
+    local -i w=$COLUMNS
+    local file=/dev/tty
+    local clear=false
+    for ((;$#;)) do
         case $1 in
-            -c | --clear)   printf '\ec' ;;
+            -c | --clear)   clear=clear ;;
+            -F | --file)    file=$2 ; shift ;;
+            -r | --reset)   clear=reset ;;
+            -w | --width | --columns) w=$2 ; shift ;;
+            -[cr]?*)        set X "${1:0:2}" "-${1:2}" "${@:2}" ;;
+            -[wF]?*)        set X "${1:0:2}"  "${1:2}" "${@:2}" ;;
+            --*=*)          set X "${1%%=*}" "${1#*=}" "${@:2}" ;;
             *)              printf >&2 'Invalid option %s\n' "$1" ; return 1 ;;
         esac
+        shift
+        : "$@"
+    done
+    (( w )) ||
+    { [[ -t 3 ]] && read _ w _ < <( stty size <&3 ) ; } ||
+    { [[ -t 2 ]] && read _ w _ < <( stty size <&2 ) ; } ||
+    { [[ -t 0 ]] && read _ w _ < <( stty size     ) ; } ||
+                    read _ w _ < <( stty size -F "$file" ) ||
+    w=48
+    local R
+    printf -v R '%*s' "$w" -
+    R=${R//?/-}
+    case $clear in
+        clear)  clear ;;
+        reset)  printf '\ec' ;;
+    esac
     printf '\e[7m%s\e[m\n' "$R"
 }
-_provides _ruler
+_ruler "$@"
