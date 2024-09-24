@@ -127,8 +127,8 @@ EndOfHelp
             printf '\nDEBUG SUICIDE - seeking magic status %s\n' "$1"
         {
         { _status_code=10#$1                  ; [[ $1 != *[!0-9]*     ]] ; } ||
-        { _status_code="EX_values[${1#EX*_}]" ; [[ ${!_status_code+X}   ]] ; } ||
-        { _status_code="SIG_values[${1#SIG}]" ; [[ ${!_status_code+X}   ]] && (( _status_code |= -128 )) ; } ||
+        { _status_code="EX_values[${1#EX*_}]" ; [[ ${!_status_code+X} ]] ; } ||
+        { _status_code="SIG_values[${1#SIG}]" ; [[ ${!_status_code+X} ]] && (( _status_code |= -128 )) ; } ||
         { _status_code=_status                ; [[ $1 = ?(EX*_)STATUS ]] ; } } && shift
         _i=$?
         ((_debug)) &&
