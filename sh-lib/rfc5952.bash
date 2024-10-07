@@ -5,19 +5,30 @@
 #
 #   "followed by" does not imply "adjacent"
 # 1. rule out:
-#    * invalid character
-#    * too many segments
-#    * invalid abbreviation
-#    * too many abbreviations
-#    * segment too long
-#    * leading 0 in a non-0-segment
+#    * matching *[!:0-9a-f]* (forbid invalid characters)
+#    * matching *:*:*:*:*:*:*:*:*:* (9 colons, too many segments)
+#    * matching *:::* (invalid abbreviation)
+#    * matching *::*::* (too many abbreviations)
+#    * matching *[!:0][!:][!:][!:][!:]* (segment too long)
+#    prefer to avoid:
+#    * matching 0[!:]* or *:0[!:]* (leading 0 in a non-0-segment)
 #    * abbreviation adjacent to 0-segment (abbreviation must be maximal)
 #
-# 2. if it has 8 apparent segments, then rule out:
-#    * any 2-candidate except after leading abbreviation
-#             (if it does not start with :: then it must not contain :0:0:)
-#    * any 3-candidate (must not contain :0:0:0:)
-#    * a middle abbreviation (must not contain :: other than at start or end)
+# 2. a written address with 9 apparent segments (8 colons) is theoretically
+#    valid if it starts or ends with "::" representing a single candidate.
+#    However there's no practical advantage to allowing this form, since it
+#    is no shorter than the "0:" or ":0" that it replaces.
+#
+#    It should not have any longer candidates, so rule out:
+#    * matching ?*::?* (must not contain :: other than at start or end)
+#    * matching *:0:0:* (must not contain any 2-candidate)
+#    * matching [!:]*[!:] (must not both starting and ending with a digit)
+#
+# 3. if it has 8 apparent segments, then (other than starting or ending with ::) it
+#    must not contain an abbreviation, and must not contain any 2-candidate, so
+#    rule out:
+#    * matching *:0:0:*
+#    * matching ?*::?*
 #
 #         and either
 #         it starts with :: and does not contain :0:0:0: , or
@@ -37,7 +48,8 @@
 #       ::*:0:0:0:*   forbidden
 #       ::*:0:0:0:*   forbidden
 #
-# 3. otherwise it must contain an abbreviation
+# 4. otherwise (if it has 7 or fewer apparent segments) it must contain an abbreviation
+#
 #
 # 4. the abbreviation must be maximal, therefore
 #       7 apparent segments
