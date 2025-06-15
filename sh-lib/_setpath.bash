@@ -52,7 +52,7 @@ EOM
             case $arg in
                 (-- | --quote-all)          quoteall=true ;;
                 (- | -q | --quote-next)     quotenext=true ;;
-                (--always)                  if_dir=false if_file=false if_link=false if_notlink=false if_exist=false ;;
+                (--always)                  if_dir=false if_file=false if_link=false if_notlink=false if_exist=false realpath=false ;;
                 (--dot=[A-Z]*)              dot=${arg#*=} ;;
                 (--empty=[A-Z]*)            dot=-${arg#*=} ;;
                 (--if-dir | -d)             if_dir=true if_exist=false ;;
@@ -64,7 +64,8 @@ EOM
                 (--move-if-@(abs|rel))      move=${arg##*[=-]} ;;
                 (--move=NEVER)              move=none ;;
                 (--prefix=*)                prefix=${arg#-*=} ;;
-                (--real-path)               realpath=true ;;
+                (--real-path | --follow)    require realpath && realpath=true ;;
+                (--real-path=NEVER | --follow=NEVER)            realpath=false ;;
                 (--?(separator=)colon)      sep=':' ;;
                 (--?(separator=)comma)      sep=',' ;;
                 (--?(separator=)semicolon)  sep=';' ;;
@@ -179,8 +180,10 @@ EOM
             # Resolve symlinks, if requested
             if (( realpath ))
             then
-                require _realpath
-                elem=$( _realpath $elem )
+                elem=$( realpath "$elem" ) || {
+                    echo >&2 ERROR: could not resolve symlink
+                    return 2
+                }
             fi
             xdir="$prefix$elem$suffix"
             if (( ${#path[@]} )) &&
