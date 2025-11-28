@@ -20,7 +20,7 @@ _setpath ()
     if [[ $* = "-h" || "--help" = "$*"* && $* = "--h"* ]]
     then
         cat <<EOM
-Usage: $FUNCNAME [options...] {variable-name} [[--append|--prefix|--delete|--clear] path]...
+Usage: $FUNCNAME [options...] {variable-name} [[--append|--preface|--delete|--clear] path]...
 Options include:
    --allow-dot, --allow-empty                   Take "." or "" as given but synonymous
    --avoid-dot, --force-empty                   Convert "." to ""
@@ -86,12 +86,15 @@ EOM
                                             (( use_hosttype = use_hosttype > 0 ))
                                             xparts=()
                                             ;;
+
                 (-[A-Z])                    sep=' ' prefix=$arg ;;
                 (-[#%^+:,/\;])              sep=${arg:1} ;;
+
                 (-a | --append)             mode=end xparts=() ;;
                 (-c | --clear)              clear=true xparts=() ;;
                 (-k | --delete)             mode=delete xparts=() ;;
-                (-p | --prefix)             mode=begin xparts=() ;;
+                (-p | --preface | --prepend | --prefix)
+                                            mode=begin xparts=() ;;
                 (-v | --verbose)            verbose=true ;;
 
                 ( --@(allow|always|avoid|do|dont|forbid|force|need|never|no|not|permit|prohibit|require)-* )
