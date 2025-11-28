@@ -5,7 +5,9 @@ ip() {
     for (( i=1 ; i<=$# ; i++ )) do
         w=${!i}
         case $w in
-          -F) ((++i)) ;; # skip parameter to '-F' option
+          -F) ((++i))
+            # skip parameter to '-F' option
+            ;;
           -?(-)f* )
             # skip parameter to '--family' option
             [[ "-family" = "$w"* ||
