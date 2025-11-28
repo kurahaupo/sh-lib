@@ -1,3 +1,7 @@
+#
+# cluck is the core implementation of the whole die/croak/confess/cluck suite;
+# the other names simply act as shorthand for options that are provided here.
+#
 function cluck {
     local _status=$?   # must be first; keep this in case we need it for the default exit code.
     local _backtrace=1
