@@ -77,7 +77,7 @@ EOM
                                                 return 1
                                             }
                                             ;;
-                (--no-merge-@(space-dot|dot-space))
+                (--no-merge-@(dot-empty|empty-dot|dot-space|space-dot))
                                             dot=UNEQUAL ;;
                 (--suffix=*)                suffix=${arg#-*=} ;;
                 (--use-host?(-)type)        use_hosttype=true xparts=() ;;
