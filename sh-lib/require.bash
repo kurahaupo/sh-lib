@@ -82,7 +82,7 @@ _provides __require_warning __require_failed
 
 function __require_load_file {
     local _f="$1" _r="$2" ; shift ; shift
-    ((!_verbose)) || printf >&2 -e "# loading '%s' ... " "$_r"
+    ((!_verbose)) || printf >&2 "# loading '%s' ... " "$_r"
     unalias 2>/dev/null "$_r"
     . "$_f" "$@" || {
         __require_failed ". $_f returned status $? while trying to load $_r"
