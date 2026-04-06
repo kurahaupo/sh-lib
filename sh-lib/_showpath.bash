@@ -31,5 +31,5 @@ _provides _showpath
 if [[ $- = *i* ]]
 then
     p()  { _showpath PATH ; }
-    _provides p 
+    _provides p
 fi
