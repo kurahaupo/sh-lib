@@ -73,7 +73,7 @@ EOM
                 (--separator=*)
                                             printf -v sep %b "${arg#-*=}"
                                             (( ${#sep} == 1 )) || {
-                                                echo "# $FUNCNAME: Invalid separator '$sep' (not a single character)"
+                                                echo >&2 "# $FUNCNAME: Invalid separator '$sep' (not a single character)"
                                                 return 1
                                             }
                                             ;;
