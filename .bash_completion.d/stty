@@ -1,0 +1,242 @@
+#! library/module/for/bash
+#
+# stty command-line completion for Bash
+#
+# Written by Martin D Kealey <martin@kurahaupo.gen.nz>
+#
+# You may copy and use this program under the terms of version three of the Gnu
+# Public Licence, or any later version as published by the Free Software
+# Foundation.
+#
+# Set COMP_VERBOSE to any non-null value to enable debugging output; unset it
+# to disable.
+#
+
+return  # not ready for use
+
+_stty() {
+    case $COMP_TYPE in
+    (63) ((++__stty_comp_count >= 3)) && COMP_TYPE=best ;;
+    (9)  ((__stty_comp_count=1)) ;;
+    (*)  ((__stty_comp_count=0)) ;;
+    esac
+    COMP_WORDBREAKS="${COMP_WORDBREAKS//:/}"
+
+    # "seen" is stack of partial states, as a string separated by slashes, shallowest-to-deepest
+    local STATE=
+    local cur="(start-of-line)"
+    local cword_index=0
+    local want=
+    local max_num= min_num=
+    local expecting=
+    local __stty_seen_PREFIX=false
+
+    COMPREPLY=()
+
+    # Too hard to localize everything, so clean up from last time
+    unset ${!__stty_seen_*}
+
+    if ${COMP_VERBOSE:+:} false
+    then
+        if [[ -t 7 || -w /dev/fd/7 || -w /proc/self/fd/7 ]]
+        then
+            # If fd#7 is already open, assume it's dedicated for debug output
+            # ${COMP_VERBOSE_INIT=$'\e[2J'}          # basic ANSI clear-screen
+            trap "
+                    trap RETURN ;
+                    echo >&7 \"Completion SEEN: \${!__stty_seen_*}\" ;
+                    echo >&7 \"Completion END: COMPREPLY=(\${COMPREPLY[*]})\"\$'\\e[49;39;0m\n' ;
+                " RETURN
+            echo -n >&7 "${COMP_VERBOSE_INIT:-$'\n################################\n'}"
+        else
+            # Otherwise, assuming that we're on an Xterm or compatible, display
+            # debugging "above" the current line
+            : ${COMP_VERBOSE_TINT=$'\e[48;5;210;30m'}  # 256-colour background
+            exec 7>&2
+            echo -n >&7 $'\e7'
+            trap "
+                    trap RETURN ;
+                    echo >&7 \"Completion SEEN: \${!__stty_seen_*}\" ;
+                    echo -n >&7 \"Completion END: COMPREPLY=('\${COMPREPLY[*]}')\"\$'\\e[49;39;0m' ;
+                    echo -n >&7 \$'\\e8' ;
+                    exec 7>&- ;
+                " RETURN
+            echo -n >&7 $'\e[A\e[999I'"${COMP_VERBOSE_TINT}"$'\e[1J\e[5H'
+        fi
+        echo >&7 "Completion START: ARGS=($*) WORDS=(${COMP_WORDS[*]}) CWORD=$COMP_CWORD KEY=$COMP_KEY LINE=($COMP_LINE) POINT=$COMP_POINT TYPE=$COMP_TYPE WORDBREAKS=[${COMP_WORDBREAKS/$'\n'/\\n}]"
+
+        __stty__en() { ((cword_index>=COMP_CWORD-2)) ; }
+        __stty_debug() { __stty__en && echo >&7 "Completion $*" ; }
+        __stty_debug_parsing_state() { __stty__en || return 0 ; local tag=$1 ; shift ; echo >&7 "Completion STATE $tag word[$cword_index]=$cur state=$STATE expecting=$expecting {$*}" ; }
+        __stty_debug_unexpected() { echo >&7 "Completion UNEXPECTED $*" ; }
+        __stty_error() { echo >&7 "Completion ERROR $*" ; break 3 ; }
+        __stty_unexpected() { echo >&7 "Completion UNEXPECTED $*" ; }
+        __stty_warning() { echo >&7 "Completion WARNING $*" ; }
+    else
+        trap ' unset ${!__stty_seen_*} ' RETURN
+        __stty_debug() { : ; }
+        __stty_debug_parsing_state() { : ; }
+        __stty_debug_unexpected() { : ; }
+        __stty_error() { local t="  $*" ; local l=${#t} ; echo -n >&2 $'\e[1K\e[33m'$t$'\e[39m\e['$l'D' ; break 3 ; }
+        __stty_unexpected() { : ; }
+        __stty_warning() { : ; }
+    fi
+
+    local __perform_expansion=false
+    for STATE in START ; do  # {{{
+        # dummy loop
+        for ((cword_index=1;cword_index<=COMP_CWORD;cword_index++)) do  # {{{
+
+            ((cword_index==COMP_CWORD)) && __perform_expansion=true
+            cur=${COMP_WORDS[cword_index]}
+
+            __stty_debug_parsing_state P1
+
+            [[ -n $want ]] && __ip_match ANY "$want" && break
+
+            want=
+
+            __stty_debug_parsing_state P2
+
+            local _V expecting=${STATE##*/} ; STATE=${STATE%/*}
+
+            local -a _S=()
+            local __empty=
+
+            [[ $expecting = =* ]] && want=${expecting#=} expecting=${STATE##*/} STATE=${STATE%/*}
+
+            [[ $expecting = '?'* ]] && __empty=1 expecting=${expecting#'?'}
+
+            __stty_debug_parsing_state P3 ${want:+want=$want} ${__empty:+empty=$__empty}
+
+            case $expecting in  # {{{
+            (START)     __ip_match ANY -R -V \
+                                             columns line min rows speed \
+                                             \
+                                             eof eol eol2 erase flush \
+                                             intr kill lnext quit rprnt \
+                                             start stop susp swtch time \
+                                             werase \
+                                             \
+                                             brkint      -brkint     \
+                                             bs0         -bs0        \
+                                             clocal      -clocal     \
+                                             cr0         -cr0        \
+                                             cread       -cread      \
+                                             crtscts     -crtscts    \
+                                             cs8         -cs8        \
+                                             cstopb      -cstopb     \
+                                             echo        -echo       \
+                                             echoctl     -echoctl    \
+                                             echoe       -echoe      \
+                                             echok       -echok      \
+                                             echoke      -echoke     \
+                                             echonl      -echonl     \
+                                             echoprt     -echoprt    \
+                                             ff0         -ff0        \
+                                             hupcl       -hupcl      \
+                                             icanon      -icanon     \
+                                             icrnl       -icrnl      \
+                                             iexten      -iexten     \
+                                             ignbrk      -ignbrk     \
+                                             igncr       -igncr      \
+                                             ignpar      -ignpar     \
+                                             imaxbel     -imaxbel    \
+                                             inlcr       -inlcr      \
+                                             inpck       -inpck      \
+                                             isig        -isig       \
+                                             istrstty    -istrstty   \
+                                             iuclc       -iuclc      \
+                                             iutf8       -iutf8      \
+                                             ixany       -ixany      \
+                                             ixoff       -ixoff      \
+                                             ixon        -ixon       \
+                                             nl0         -nl0        \
+                                             noflsh      -noflsh     \
+                                             ocrnl       -ocrnl      \
+                                             ofdel       -ofdel      \
+                                             ofill       -ofill      \
+                                             olcuc       -olcuc      \
+                                             onlcr       -onlcr      \
+                                             onlret      -onlret     \
+                                             onocr       -onocr      \
+                                             opost       -opost      \
+                                             parenb      -parenb     \
+                                             parmrk      -parmrk     \
+                                             parodd      -parodd     \
+                                             tab0        -tab0       \
+                                             tostop      -tostop     \
+                                             vt0         -vt0        \
+                                             xcase       -xcase
+                        case $_V in
+                        ( min )
+                            STATE+="/NUMBER8" ;;
+                        ( columns | line | rows | speed )
+                            STATE+="/NUMBER16" ;;
+                        ( eof | eol | eol2 | erase | flush \
+                        | intr | kill | lnext | quit | rprnt \
+                        | start | stop | susp | swtch | time \
+                        | werase )
+                            STATE+="/CHAR" ;;
+                        esac
+                        ;;
+
+            (NUMBER?*)  __ip_match NUM --bits=${expecting#NUMBER} --radix=auto ||
+                        __ip_match_failed ;;
+
+            (CHAR)      __ip_match ANY \
+                                       ^@=^- ^A ^B ^C ^D ^E ^F ^G \
+                                       ^H ^I ^J ^K ^L ^M ^N ^O \
+                                       ^P ^Q ^R ^S ^T ^U ^V ^W \
+                                       ^X ^Y ^Z ^\[ ^\\ ^\] ^^ ^_ ^\? \
+                                       ' ' \
+                                       \! \" \# \$ % \& \' \( \) \* + , - . / \
+                                       0 1 2 3 4 5 6 7 8 9 : \; \< = \> \? \
+                                       @ A B C D E F G H I J K L M N O
+                                       P Q R S T U V W X Y Z \[ \\ \] ^ _
+                                       \` a b c d e f g h i j k l m n o
+                                       p q r s t u v w x y z \{ \| \} \~  ||
+                        __ip_match NUM --bits=8 --radix=auto ||
+                        __ip_match_failed
+                        ;;
+
+
+            esac  # }}}
+
+            __stty_debug_parsing_state P5
+
+        done  # }}}
+
+        __stty_debug "COMPREPLY=[${COMPREPLY[*]}] (after compgen)"
+
+        ((${#COMPREPLY[@]} == 0)) && __stty_warning "No matches for '$cur'"
+
+        # completion treats some punctuation as if they were word-separators, and appends to current word rather than replacing it
+        if [[ -n "$COMP_WORDBREAKS" && $cur = *[$COMP_WORDBREAKS]* ]]
+        then
+            local rword_index
+            cur="${cur%"${cur##*[$COMP_WORDBREAKS]}"}"
+            for ((rword_index=0 ; rword_index<${#COMPREPLY[@]} ; rword_index++ )) do
+                COMPREPLY[rword_index]="${COMPREPLY[rword_index]#"$cur"}"
+            done
+        fi
+
+        unset ${!__stty_seen_*}
+        return 0
+    done  # }}} end dummy loop
+    COMPREPLY=()
+    __stty_debug_parsing_state '***ABORT***'
+    #__stty_unexpected "Lost sync? STATE=$STATE expect=$expecting cur=$__cur"
+    unset ${!__stty_seen_*}
+    [[ $COMP_TYPE = best ]] && COMP_TYPE=9
+    return 1
+}
+complete -F _stty -o nospace stty
+
+# speed 38400 baud; rows 147; columns 359; line = 0;
+# intr = ^C; quit = ^\; erase = ^?; kill = ^U; eof = ^D; eol = <undef>; eol2 = <undef>; swtch = <undef>; start = ^Q; stop = ^S; susp = ^Z; rprnt = ^R; werase = ^W; lnext = ^V; flush = ^O; min = 1; time = 0;
+# -parenb -parodd cs8 -hupcl -cstopb cread -clocal -crtscts
+# -ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr icrnl ixon -ixoff -iuclc -ixany -imaxbel iutf8
+# opost -olcuc -ocrnl onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0
+# isig icanon iexten echo echoe echok -echonl -noflsh -xcase -tostop -echoprt echoctl echoke
+

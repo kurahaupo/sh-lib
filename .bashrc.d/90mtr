@@ -1,0 +1,4 @@
+
+
+# network tools
+mtr() { command mtr -t "$@"; }

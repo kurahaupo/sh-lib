@@ -1,0 +1,2 @@
+c=$( complete -p cd 2>/dev/null )
+${c:-complete -d} pushd

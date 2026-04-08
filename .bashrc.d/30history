@@ -1,0 +1,57 @@
+## HISTORY
+
+# Don't put duplicate lines in the history, nor lines starting with whitespace.
+# Append to history file rather than overwriting.
+
+shopt -s histappend histreedit histverify
+command_oriented_history=yes
+HISTCONTROL=ignoreboth
+
+# Only adjust history if LOGHOME is either unset, or the same as HOME
+
+if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
+    # Don't truncate unless it gets ludicrously huge.
+    # Switch to new history file (.bash_history.d/$SECONDS.$TTY) AFTER setting
+    # size etc.
+
+    HISTSIZE=1000000
+    HISTFILESIZE=1000000
+    HISTTIMEFORMAT='%F,%T '
+    hist_dir=${LOGHOME:-$HOME}/.bash_history.d
+    hist_tmp=$HOME/tmp/hist.$$
+
+    hist_tty=${TTY=$( tty )}
+    hist_tty=${hist_tty#/dev/}
+    hist_tty=${hist_tty//\//-}
+    hist_tty=${hist_tty:-None}
+
+    HISTFILE=$hist_dir/$SECONDS.$hist_tty.${HOSTNAME%%.*}
+
+    [[ -d $hist_dir ]] ||
+    install -d -m1700 "$hist_dir"
+
+    # Save any current history to new HISTFILE, then clear all in-memory
+    # history, and then read all history from the last 2 weeks back in.
+    history -a
+
+    # NOTE: « history -r /dev/stdin » fails if stdin is a pipe/fifo, so
+    # write a temporary file.
+    # Filenames are in timestamp order (at least, by starting time)
+    if [[ $USER != root ]] ; then
+        sudo chgrp -R "$USER" "$hist_dir"/1*        2> /dev/null
+        sudo chmod -R o=rw,g-wxs,o= "$hist_dir"/1*  2> /dev/null
+        sudo find "$hist_dir" -maxdepth 1 -name '1*' -type f \( -user "$USER" \(   -perm /040 -exec chmod -c g-r {} + , -true \) \
+                                                                           -o \( ! -perm /040 -exec chmod -c g+r {} +         \) \)
+    fi
+    hist_stx=$'\x02'    # separates timestamp from its event (history files are manually edited from time to time to ensure this)
+    find "$hist_dir" -maxdepth 1 -name '1*' -type f -mtime -15 -print0 |
+     sort -z |
+      xargs -r0 cat |
+       sed "/^#[[:digit:]]+$hist_stx/ s/$hist_stx/\n/g" > "$hist_tmp" &&
+    history -c &&
+    history -r "$hist_tmp" &&
+    rm -f "$hist_tmp"
+
+    # Make sure we save the history as we go...
+    PROMPT_COMMAND+=$'\nhistory -a'
+fi

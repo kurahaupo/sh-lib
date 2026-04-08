@@ -1,0 +1,124 @@
+## TERMINAL and PROMPT
+
+# set variable identifying the chroot you work in (used in the prompt below)
+: ${debian_chroot:=$(test -r  /etc/debian_chroot && cat /etc/debian_chroot)}
+
+if ((SHLVL < 2))
+then
+    PS_depth=
+elif ((SHLVL < 5))
+then
+    PS_depth=+++++
+    PS_depth=${PS_depth:0:SHLVL-1}
+else
+    PS_depth="{+$((SHLVL-1))}"
+fi
+
+PS1=$PS_depth'\t ${debian_chroot:+($debian_chroot) }\h:\u \!\$ '
+
+colour_prompt=false
+
+# Does the terminal support colour?
+case $TERM in
+ ( ansi* | console* | linux* | vt[!1]??* \
+ | *[kx]term* | *[rx]vt* | *[Pp]u[Tt][Tt][Yy]* \
+ | screen* | tmux* )
+    # These terminal types "always" support colour, or degrade gracefully.
+    # With "screen" and "tmux" we just guess. These types mean we can't
+    # actually know what type of terminal is currently attached IF ANY.
+    colour_prompt=true
+    ;;
+ (*)
+    # Declaring setaf almost always implies compliance with ECMA-48, or at
+    # least the subset dealing with colour.
+    # (Supporting colour but without ECMA-48 compliance is now EXTREMELY rare,
+    # and would tend to be indicated by declaring setf rather than setaf.)
+    type tput > /dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1 && colour_prompt=true
+    ;;
+esac
+
+if ((colour_prompt))
+then
+  # PS1='\t ${debian_chroot:+($debian_chroot) }\h:\u \!\$ '
+    PS1='\[\e[${PSHILITE:-7}m\]\t ${debian_chroot:+\[\e[2m\]($debian_chroot)\[\e[22m\] }\!\[\e[0m\]\$ '
+    # Use a simple hash of $HOSTNAME to pick a colour from the 6×6×6 colour
+    # cube. Normally use it directly as the background colour with white as the
+    # foreground colour; but if it's "too dark" use its complement as the
+    # foreground colour with charcoal (237) as the background colour.
+    #
+    # P1 and P2 are chosen to improve the spread of values, so that
+    # consecutively numbered hosts will have dissimilar colours. P3 is chosen
+    # so that that "black" is the result for my desktop PC.
+    #
+    # NB: in some environments having consecutively numbered hosts with similar
+    # or identical colours may be desirable, in which case set P2 = 1.
+    #
+    # (P1 & P2 both need to be mutually prime with 30, and P1 should be at
+    # least (6×6×6)² to give an unbiased spread.)
+    PSHILITE=$( h=${HOSTNAME%%.*}$debian_chroot h=${h,,}
+                P1=46663 P2=223 P3=30
+                qr=${BASHRC_prompt_colours_red:-6} qg=${BASHRC_prompt_colours_green:-6} qb=${BASHRC_prompt_colours_blue:-6}
+                for cx in qr qg qb ; do (( cx < 1 || ($cx = 1), cx > 6 || ($cx = 6) )) ; done
+
+                ((
+                    m = qr*qg*qb,
+                    n1 = 37#${h//[^0-9a-z]/A},
+                    n1 &= 0x7fffffff,
+                    n1 %= P1,
+                    n1 *= P2,
+                    n1 += P3,
+                    n2 = n1 % m
+                ))
+
+                ((
+                    r=5-n2/qb/qg%qr, g=5-n2/qb%qg, b=5-n2%qb,
+                    bg = 16+r*36+g*6+b,
+                    fg = 0,
+                    r+g+b/2 < 5 && ( fg = 247-bg, bg = 237 )
+                ))
+
+                (( fg < 8 )) || fg="8;5;$fg"
+                (( bg < 8 )) || bg="8;5;$bg"
+                cc="7;4$fg;3$bg"
+                echo "$cc"
+
+                [[ $BASHRC_DEBUG ]] &&
+                    printf >&2 \
+                        'Prompting: \e[%smhostname\e[39;49m=%-20s hash=%-8u (%%%u=)%-3u rgb=(%s) colour-code=%s\n' \
+                        "$cc" "$h" "$n2" "$m" "$n2" "$r,$g,$b" "$cc"
+              )
+fi
+
+# When building & testing new versions of Bash, put the version in the prompt
+case $BASH in
+  $HOME/* ) debian_chroot=$BASH_VERSION
+esac
+
+# Does the terminal support a status line, window title, or similar?
+if
+    case $TERM in
+      *[kx]term* | *[rx]vt* | *putty* | *PuTTY* )
+            # Window title bar
+            PS_open='\033]2;' PS_close='\007'   ;;
+      screen* | tmux* )
+            # Status line
+            PS_open='\033k'   PS_close='\033\\' ;;
+      *)    false ;;
+    esac
+then
+    PS_status="$PS_open"
+    PS_status+='\h:\u'      # ${HOSTNAME%%.*}:${USER}
+    PS_status+=' \w'        # ${PWD##*/}
+    PS_status+=' [\l] \!'   # ${TTY##*/}
+    PS_status+=' \D{%F,%T}' # $( date +%F,%T )
+    PS_status+='${WINDOWNAME:+ [$WINDOWNAME]}'
+    PS_status+='${debian_chroot:+ ($debian_chroot)}'
+    PS_status+='${SSH_CLIENT:+ from ${SSH_CLIENT%%\ *}}'
+    PS_status+="$PS_close"
+    PS1=$PS_depth"\[$PS_status\]$PS1"
+    unset PS_open PS_status PS_close
+
+    # Allow EOF to close just a window, rather than whole login session
+    unset ignoreeof
+fi
+unset PS_depth

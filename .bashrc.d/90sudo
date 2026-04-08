@@ -1,0 +1,43 @@
+
+# self-aliasing with trailing space, so that tab-completion defaults to
+# 'complete -c' (ie, another command name)
+for c in run_as sudo xargs ; do
+    builtin alias "$c=$c "
+done
+
+[[ $EUID = 0 || -w / ]] ||  # don't need these if we're already root...
+for c in \
+        apt apt-get dselect dpkg yum rpm \
+        ff-install \
+        ifup ifdown ifconfig iwconfig iwlist \
+        vconfig mii-tool \
+        fwcf loadfw \
+        ipset \
+        iptables  iptables-save  iptables-restore \
+        ip6tables ip6tables-save ip6tables-restore \
+        arptables arptables-save arptables-restore \
+        ebtables  ebtables-save  ebtables-restore \
+        nft \
+        wg vpnc-connect vpnc-disconnect openvpn \
+        dhclient \
+        tcpdump traceroute \
+        arping nmap netstat \
+        service systemctl \
+        apache2ctl rndc \
+        chattr \
+        chroot \
+        iotop \
+        swap_usage \
+        pm-suspend \
+        pm-hibernate \
+        modprobe insmod rmmod depmod \
+        hwclock \
+        mount umount cfdisk fdisk partprobe \
+
+do
+    builtin unalias $c 2>/dev/null
+    eval $c'() {
+        echo >&2 "# auto-sudo: using '\''sudo '$c' $*'\''"
+        command sudo '$c' "$@"
+    }'
+done

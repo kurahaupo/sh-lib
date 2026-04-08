@@ -1,0 +1,4 @@
+akl() { TZ=NZ                   "$@" ; }
+bne() { TZ=Australia/Brisbane   "$@" ; }
+syd() { TZ=Australia/Sydney     "$@" ; }
+utc() { TZ=UTC                  "$@" ; }

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Assume that NLs between each timestamp and its command, and within any
+# multi-line commands, have been replaced by STX/^B, so that each line has:
+#  - a '#'; then
+#  - the epoch-second when it occurred, as a decimal number; then
+#  - an STX (^B, \x02) byte; then
+#  - the text of the command, with each embedded NL replaced by STX; then
+#  - NL as a line terminator (making a normal POSIX text file).
+
+cd "$HOME"/.bash_history.d/ || exit
+
+out=sorted
+tmp=$out.~T$$~
+at_exit() { rm -f "$tmp" ; }
+
+trap at_exit EXIT
+
+grep -h $'^#1[0-9.]*\x02' [1a]* |
+ sort -k 1.2n |
+  uniq |
+   perl -pe '
+        /^\#/ or undef($p), next;
+        m<^#(\d+)(?:\.\d+|)\x02> or warn("Bad line $. $_\n"), next;
+        $t = $1;
+        # Insert blank lines between sessions...
+        if ($p and $t<$p || $t > $p+7*86400) { printf "\n" };
+        $p = $t;
+    ' >| "$out"
+

@@ -1,0 +1,10 @@
+# Set PATH to a useful value
+
+## Use _setpath from Martin's shell library ~/.sh-lib
+
+. $HOME/.sh-lib/require.bash _setpath
+
+_setpath PATH --if-dir --use-hosttype --real-path \
+            --prefix /sbin /usr/sbin /usr/local/sbin /opt/*/sbin ~/sbin \
+            --append /bin  /usr/bin  /usr/local/bin  /opt/*/bin  ~/bin \
+                     /snap/bin /opt/android-studio/bin

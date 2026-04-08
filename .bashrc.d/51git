@@ -1,0 +1,15 @@
+#export GREP_OPTIONS+=' --exclude-dir=.git'
+
+# git shorthand - now as commands in ~/bin
+
+#g()     { git "$@"; }
+#gco()   { git checkout       "$@"; }
+#gci()   { git commit         "$@"; }
+#gdi()   { git diff           "$@"; }
+#gfe()   { git fetch          "$@"; }
+#gpp()   { git pull           "$@"; }
+#gff()   { git pull --ff-only "$@"; }
+#gps()   { git push           "$@"; }
+#gpf()   { git push --force-with-lease "$@"; }
+#grb()   { git rebase         "$@"; }
+#gre()   { git reset          "$@"; }

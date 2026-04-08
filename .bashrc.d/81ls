@@ -1,0 +1,34 @@
+builtin unalias 2>/dev/null l l. la ll ls lsd
+
+export QUOTING_STYLE=literal
+export TIME_STYLE=+%F\ %T.%_9N\ %z
+
+unset LS_OPTIONS    # this is not a magic var understood by "ls".
+
+# Trapdoor: redefine this function at first use, to include '-N' only if it's
+# supported.
+#
+# When omitting -N, assume the worst-case and also omit '=WHEN' from --color,
+# because BusyBox v1.27.2 (on Vyatta) core-dumps:
+#   $ /bin/ls -d --color
+#   .
+#   $ /bin/ls -d --color=auto
+#   Segmentation fault (core dumped)
+#   $ /bin/ls --version
+#   /bin/ls: unrecognized option '--version'
+#   BusyBox v1.27.2 (2023-06-15 08:27:54 UTC) multi-call binary.
+
+ls() {
+    if command ls -dN . <>/dev/null 1>&0 2>&1
+    then ls() { : "function ls defined at line 23 in .bashrc.d/81ls (with -N)"    ; LC_COLLATE=C command ls --full-time ${LS_COLORS:+--color=auto} -CFN "$@" ; }
+    else ls() { : "function ls defined at line 24 in .bashrc.d/81ls (without -N)" ; LC_COLLATE=C command ls --full-time ${LS_COLORS:+--color}      -CF  "$@" ; }
+    fi
+    ls "$@"
+}
+
+l()    { : "function l defined at line 29 in .bashrc.d/81ls"   ; ls       "$@" ; }
+al()   { : "function al defined at line 30 in .bashrc.d/81ls"  ; ls -A    "$@" ; }
+aal()  { : "function aal defined at line 31 in .bashrc.d/81ls" ; ls -a    "$@" ; }
+ll()   { : "function ll defined at line 33 in .bashrc.d/81ls"  ; ls -ils  "$@" ; }
+all()  { : "function ll defined at line 34 in .bashrc.d/81ls"  ; ls -Ails "$@" ; }
+aall() { : "function ll defined at line 35 in .bashrc.d/81ls"  ; ls -ails "$@" ; }

@@ -1,0 +1,1667 @@
+#! library/module/for/bash
+#
+# ip (iproute2) command-line completion for Bash.
+#
+# Written by Martin D Kealey <martin@kurahaupo.gen.nz>
+#
+# Released at LCA2010, 19 January 2010.
+# Updated to use a parser state-stack April 2012.
+# Improved clean-up-at-exit Feb 2019
+# Progressively updated for different versions of the "ip" command
+#
+# You may copy and use this program under the terms of version three of the Gnu
+# Public Licence, or any later version as published by the Free Software
+# Foundation.
+#
+# Set COMP_VERBOSE to any non-null value to enable debugging output; unset it
+# to disable.
+#
+
+################################################################################
+#
+# Bash version features
+#
+# v4.0  added 'readarray', so provide slower implementation for older versions
+#
+
+if (( BASH_VERSINFO[0] < 4 ))
+then
+    readarray ()
+    {
+        [[ $1 = -* ]] && shift  # skip over -t
+        local __ra_a=$1 __ra_n=0
+        while read -r "$__ra_a[$(( __ra_n++ ))]" ; do :; done
+    }
+fi
+
+################################################################################
+#
+# _ip - main entry point for programmable completion for the "ip" command,
+#       invoked indirectly by "complete -F _ip ... ip"
+#
+
+_ip ()
+{
+
+    [[  $true = 1 ]] || local -ri  true=1
+    [[ $false = 0 ]] || local -ri false=0
+
+    case $COMP_TYPE in
+        (63)    (( ++__ip_comp_count >= 3 )) && COMP_TYPE=best ;;
+        (9)     (( __ip_comp_count = 1 )) ;;
+        (*)     (( __ip_comp_count = 0 )) ;;
+    esac
+    COMP_WORDBREAKS="${COMP_WORDBREAKS//:/}"
+
+    # "STATE" is stack of parser states, as a string separated by slashes,
+    # topmost at the end.
+    local STATE=
+    local cur="(start-of-line)"
+    local cword_index=0
+    local save_device=
+    local save_family='-Fdual'
+    local want=
+    local max_num= min_num=
+    local expecting=
+    local __ip_seen_PREFIX=false
+
+    # Bash has no way to localize functions, and localizing variables is
+    # fraught, so upon return:
+    # 1. All other functions with names matching __ip_deferred* will be called
+    #    in natural collation order; and then
+    # 2. All functions and variables with names matching __ip_* will be unset
+    #    (which includes this function, of course)
+    __ip_deferred ()
+    {
+        local -a __ip__cc=()
+        readarray -t __ip__cc < <( declare -F )
+        __ip__cc=( "${__ip__cc[@]##*\ }" )  # trim off leading "declare -f " or similar
+        local __ip__c __ip__ci
+        for __ip__ci in "${!__ip__cc[@]}"
+        do
+            __ip__c=${__ip__cc[__ip__ci]}
+            [[ $__ip__c = __ip_deferred?* ]] && "$__ip__c"
+            [[ $__ip__c = __ip_* ]] || unset "__ip__cc[__ip__ci]"
+        done
+        unset -f "${__ip__cc[@]}"
+        unset "${!__ip_@}"
+    }
+
+    #
+    # If the function "cluck" is defined, use it; otherwise display the given
+    # message, with a stack trace using the "caller" built-in (if available).
+    #
+    __ip_cluck ()
+    {
+        [[ -n $COMP_VERBOSE ]] || return
+        if [[ $( type -t cluck ) = function ]]
+        then
+            (cluck "$@" 2>&1)
+        elif [[ $( type -t caller ) = builtin ]]
+        then
+            printf '%s\n' "$*"
+            local l d
+            for (( l = 1 ; l < 20 ; l++ )) do
+                d=$( caller $l ) && [[ -n $d ]] || break
+                printf '    %s\n' "$d"
+            done
+            printf '\n'
+        else
+            printf '%s\n' "$*"
+        fi >&7
+    }
+
+    #
+    # Read in the contents of a file, minus comments
+    # Avoid external commands (such as sed).
+    #
+    __ip_slurp ()
+    {
+        local l
+        while
+            IFS= read -r l
+        do  l=${l//$'\t'/' '}               # squash tabs and spaces
+            l=${l//'                '/' '}  # ''
+            l=${l//'        '/' '}          # ''
+            l=${l//'    '/' '}              # ''
+            l=${l//'  '/' '}                # ''
+            l=${l%%'#'*}                    # strip comments
+            l=${l#"${l%%[^0-9]*} "}         # strip leading word comprised entirely of digits
+            [[ -n $l ]] || continue
+            printf '%s\n' "$l"
+        done < $1
+        return
+    }
+
+    __ip_list_of_devices ()
+    {
+    #   command ip -o link list |
+    #   sed -e 's/^[0-9]*: //; s/: .*//; /^wmaster/d'
+        local i
+        local -a I
+        I=( /sys/class/net/* /proc/sys/net/ipv?/conf/* )
+        for (( i = ${#I[@]} ; i>=0 ; --i )) do
+            I[i]=${I[i]##*/}
+            [[ ${I[i]} = all ||
+               ${I[i]} = default ||
+               ${I[i]} = wmaster* ||
+               ${I[i]} = \* ]] &&
+            unset "I[i]"
+        done
+        printf '%s\n' "${I[@]}"
+    }
+
+    ################################################################################
+    #
+    # The __ip_match function attempts to match various kinds of objects.
+    #
+    # It expects the variables cur and __perform_expansion to be set by the caller (_ip), with cur
+    # being the "current word", and __perform_expansion indicating whether it's the "focal word".
+    #
+    # Its first parameter indicates the class of match to perform, denoted here as
+    # WHAT, being one of:
+    #       CUR
+    #       ANY
+    #       NUM
+    #       ADDR
+    #
+    # It uses functions ip_chk_$WHAT to accept leading words, and and ip_exp_$WHAT
+    # to expand potential matches of the target word, and ip_pre_$WHAT to perform
+    # preliminary common processing.
+    #
+    # It sets the following (temporary) variables which may be useful to these
+    # functions:
+    #
+    #   __cur       The word being examined (copied from $cur)
+    #   __val       The effective value being examined; this will be the word with
+    #               any prefix and suffix removed, and then (by the __ip_pre_$WHAT
+    #               function) converted to a canonical form:
+    #                   for numbers, converted to shell internal form and then back
+    #                       (decimal, even when the result is in another radix)
+    #                   for link addresses, with 2 hex digits per segment, and 6 or 8 segments
+    #                   for IPv4 addresses, as 4 decimal octets, without leading zeroes
+    #                   for IPv6 addresses, as 8 hex words, without leading zeroes,
+    #                       and then squashing a string of zeroes, either
+    #                       rightmost, when a prefix shorter than /128 is given, or
+    #                       longest, otherwise.
+    #
+    #   __prefix __suffix parts removed, which should be added back to each
+    #               generated match added to COMPREPLY
+    #   __min __max
+    #               Numeric limits; may apply to a prefix length.
+    #   __radix     Numeric output radix if initially set to "auto", the inferred
+    #               radix of the given value will be used.
+    #
+    # The only time these functions return "true" is when they have *the only*
+    # possible match, and that for all non-focus words, and generally no others.
+    #
+    ################################################################################
+    #
+    # __ip_match CUR
+    #
+    # Accept the current word unconditionally
+    #
+
+    __ip_pre_CUR ()
+    {
+        __ip_debug_parsing_state Q_ __cur="$__cur" __val="$__val"
+    }
+
+    __ip_chk_CUR ()
+    {
+        __ip_debug_parsing_state C_ __cur="$__cur" __val="$__val"
+        true
+    }
+
+    __ip_exp_CUR ()
+    {
+        __ip_debug_parsing_state E_ __cur="$__cur" __val="$__val" "replying=$__prefix$__val$__suffix"
+        COMPREPLY=( "${COMPREPLY[@]}" "$__prefix$__val$__suffix" )
+        true
+    }
+
+    ################################################################################
+    #
+    # __ip_match ANY [-R[KEY]] [-S[SUFFIX]] [-V[VARNAME]] [MATCH-LIST...]
+    #
+    # The MATCH-LIST elements are of the form [MATCH=]TOKEN or MATCH=[TOKEN]=GROUP.
+    # The TOKEN is included in COMPREPLY (which means it may replace a partially
+    # typed ALIAS); GROUP is used to set the -V parameter (if set).
+    #
+
+    __ip_pre_ANY ()
+    {
+        __ip_debug_parsing_state QO __cur="$__cur" __val="$__val"
+    }
+
+    __ip_chk_ANY ()
+    {
+        __ip_debug_parsing_state CO __cur="$__cur" __val="$__val"
+        local _p _q _t
+        for _p do
+            _t="${_p%%=*}"
+            [[ $_t = "$__val"* ]] || continue
+            _p="${_p#*=}"
+            (( __skip_seen )) && {
+                _q="${_p#*=}"
+                _q="$__seen_pref${_q//[^_0-9a-zA-Z]/__}"
+                #__ip_debug "Remembering that $_p has been seen (setting $_q=true)"
+                (( $_q = true ))
+            }
+            _p="${_p%%=*}"
+            _p="${_p:-$_t}"
+            __val="$_p"
+            return 0
+        done
+        return 1
+    }
+
+    __ip_exp_ANY ()
+    {
+        __ip_debug_parsing_state EO
+        __ip_debug "__ip_match skip_seen=$__skip_seen seen_pref=$__seen_pref set_var=$__set_var val=$__val WORDS=($*)"
+        local _p _q _t
+        for _p do
+            _t="${_p%%=*}"
+            [[ $_t = "$__val"* ]] || continue
+            _p="${_p#*=}"
+            (( __skip_seen )) && {
+                _q="${_p#*=}"
+                _q="$__seen_pref${_q//[^_0-9a-zA-Z]/__}"
+                (( _q )) && continue
+                (( $_q = true ))
+            }
+            _p="${_p%%=*}"
+            _p="${_p:-$_t}"
+            COMPREPLY=( "${COMPREPLY[@]}" "$_p$__suffix" )
+            [[ $COMP_TYPE = best ]] && return 0  # unfortunately this doesn't work; after the first tab-key, the shell will always show a list, even if it (now) has only one member
+        done
+    }
+
+    ################################################################################
+    #
+    # __ip_match NUM [ [--max=N] [--min=N] | [--bits=N] [--signed] ]
+    #                [--radix=auto | --radix=N]
+    #                [-Iprefix] [-Ssuffix]
+    #                [-V[varname]]
+    #
+
+    __ip_pre_NUM ()
+    {
+        __ip_debug_parsing_state QN __cur="$__cur" __val="$__val"
+        if [[ $__radix = auto ]]
+        then
+            case $__val in
+                (0[xX]*) __prefix+=${__val::2} __val=${__val:2} __radix=16 ;;
+              # (0o*)    __prefix+=${__val::2} __val=${__val:2} __radix=8  ;;
+              # (0q*)    __prefix+=${__val::2} __val=${__val:2} __radix=4  ;;
+              # (0b*)    __prefix+=${__val::2} __val=${__val:2} __radix=2  ;;
+                (0?*)    __prefix+=${__val::1} __val=${__val:1} __radix=8  ;;
+                (0) ;;  # could still be base 8 or base 16
+                (*)      __radix=10 ;;
+            esac
+        fi
+        [[ $__val = ?*     && $__val != *[^0-9]*      ]] ||
+        [[ $__radix = auto && $__val = 0x?* && $__val != 0x*[^0-9a-f]* ]] ||
+        [[ $__radix = 16   && $__val != *[^0-9a-f]*   ]] ||
+            return 1
+        (( __val += 0 ))
+    }
+
+    __ip_chk_NUM ()
+    {
+        __ip_debug_parsing_state CN __cur="$__cur" __val="$__val"
+        __ip_debug "CHECKNUM $*"
+        (( ${#__min} == 0 || __min <= __val )) || return 1
+        (( ${#__max} == 0 || __val <= __max )) || return 1
+        return 0
+    }
+
+    __ip_exp_NUM ()
+    {
+        __ip_debug_parsing_state EN __cur="$__cur" __val="$__val"
+        local -a __digits=( 0 1 2 3 4 5 6 7 8 9
+                            a b c d e f g h i j k l m n o p q r s t u v w x y z
+                            A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+                            @ _ )
+        __ip_debug "MATCHNUM min=$__min max=$__max radix=$__radix prefix=$__ignore_prefix suffix=$__suffix $*"
+        if [[ ${__radix:?'Radix not set!'} = auto ]]
+        then
+            case $__val in
+                (0x*)   __radix=16 ;;
+                (0*)    __radix=8 ;;
+                (*)     __radix=10 ;;
+            esac
+        fi
+
+        __val=${__val#0x} __val=${__val#${__val%%[^0]*}}
+        if (( ${#__neg} & 1 ))
+        then
+            # Swap & negate (but leave blank as blank)
+            local __temp
+            case $__min:$__max in
+                (:) ;;
+                (:?*)   (( __min = -__max )) ; __max= ;;
+                (*?:)   (( __max = -__min )) ; __min= ;;
+                (*)     (( __temp = __min, __min = -__max, __max = -__temp )) ;;
+            esac
+        fi
+
+        # No non-digits allowed
+        # Check that it contains no disallowed digits
+        if  [[ $__val = *[^${__digits[*]:0:__radix}]* || $__val = *' '* ]]
+        then
+            __ip_unexpected "MATCHNUM $__val not suitable for radix $__radix"
+            return 1
+        fi
+
+        # TODO Use a better algorithm here
+
+        local __i
+        (( __i = $__radix#0$__val ))
+
+        (( __min <= __i && __i <= __max )) && COMPREPLY=( "${COMPREPLY[@]}" "$__cur$__suffix" )
+
+        local __min_digit __max_digit
+
+        (( __offset = __i * __radix ))
+        while
+            (( __min_digit = (${#__min} == 0 || __min < __offset ? 0 : __min - __offset),
+               __max_digit = (${#__max} == 0 || __max >= __offset+__radix ? __radix-1 : __max - __offset ) ))
+            (( __min_digit >= __radix ))
+        do
+            __ip_debug "MATCHNUM: $__cur->$__val->$__i radix=$__radix offset=$__offset (min=$__min max=$__max) -> (min_digit=$__min_digit max_digit=$__max_digit) RETRY"
+            (( __min/=__radix, __max/=__radix ))
+        done
+        __ip_debug "MATCHNUM: $__cur->$__val->$__i radix=$__radix offset=$__offset (min=$__min max=$__max) -> (min_digit=$__min_digit max_digit=$__max_digit)"
+
+        for (( __i=__min_digit ; __i<=__max_digit ; ++__i )) do
+            COMPREPLY=( "${COMPREPLY[@]}" "${__cur}${__digits[__i]}" )
+        done
+    }
+
+    ################################################################################
+    #
+    # __ip_match ADDR [-R[KEY]] [-S[SUFFIX]] [-V[VARNAME]] [-4|-6|-46|-0] ...
+    #
+
+    __ip_pre_ADDR ()
+    {
+        __ip_debug_parsing_state QA __cur="$__cur" __val="$__val"
+        __ip_debug "PRELIM-$_w - Completing address starting with '$__cur'; will accept" $(
+            for w in ipv4 ipv6 link prefix
+            do
+                (( accept_$w )) && printf ' %s' $w
+            done
+            (( accept_prefix > 1 )) && printf ' %s\n' default
+        )
+
+        # Reject impossible things...
+        if [[ ( $__cur = *[^0-9a-f:./]* && default != "$__cur"* ) ||
+              $__cur = *:*:*:*:*:*:*:*:* ||
+              $__cur = *:::* ||
+              $__cur = *::*::* ||
+              $__cur = *.*.*.*.* ||
+              $__cur = *.*[^0-9./]* ||
+              $__cur = */*[^0-9]* ]]
+        then
+            __ip_warning "Cannot match '$__cur' as any type of address"
+            return 1
+        fi
+    }
+
+    __ip_chk_ADDR ()
+    {
+        __ip_debug_parsing_state CA __cur="$__cur" __val="$__val"
+          (( accept_prefix     )) && [[ $__val = */* && $__val != */*[^0-9]* ]] && __val=${__val%/*}
+
+        { (( accept_prefix > 1 )) && [[ default = "$__val"* ]] ; } ||
+        { (( accept_ipv6       )) && [[ $__val = *::* || $__val = *:*:*:*:*:*:*:* || $__val = *:*:*:*:*:*:*.*.*.* ]] ; } ||
+        { (( accept_ipv4       )) && [[ $__val = *.*.*.* && $__val != *:* ]] ; } ||
+        { (( accept_link       )) && [[ $__val = ??:??:??:??:??:?? ]] ; } ||
+        {
+            __ip_warning "Cannot match '$__val' as requested type of address"
+            return 1
+        }
+    }
+
+    __ip_exp_ADDR ()
+    {
+        __ip_debug_parsing_state EA __cur="$__cur" __val="$__val"
+        # Accept "default" keyword, if appropriate
+        if (( accept_prefix > 1 ))
+        then
+            __ip_match ANY default
+        fi
+
+        if (( accept_prefix ))
+        then
+            __ip_debug "Looking for prefix"
+            case $__val in
+                (*:*/*) __ip_match NUM -I'*/' --radix=10 --min=1 --max=128 ; return ;;
+                (*/*)   __ip_match NUM -I'*/' --radix=10 --min=1 --max=32  ; return ;;
+                (*.*.*.*? | *:: | *::*:*? | *:*:*:*:*:*:*:*)
+                        __ip_match CUR -S/ ;;
+            esac
+        else
+            case $__val in
+                (*/*)   __ip_warning "Prefix not allowed" # return ;;
+            esac
+        fi
+
+        if (( accept_link ))
+        then
+            __ip_debug "Looking for link-layer MAC (Ethernet) address"
+            case :$__val in
+                (*::* | *:?:* | *[^:][^:][^:]* | *[^0-9a-f:]*) ;;
+                (:??:??:??:??:??:??)    __ip_match CUR ;;
+                (*:??)                  __ip_match CUR -S: ;;
+                (*)                     __ip_match NUM -I'*:' --radix=16 --bits=8 ;;
+            esac
+        fi
+
+        if (( accept_ipv6 ))
+        then
+            __ip_debug "Looking for IPv6 address"
+
+            __ip_match ANY -S'' fe80:: fc00:: :: ::1
+
+            # one 16-bit block
+            case $__val in
+                (*:*:*:*:*:*:*:[0-9a-f][0-9a-f][0-9a-f][0-9a-f])    __ip_match CUR                                                           ;; # whole last block?
+                (*:[0-9a-f][0-9a-f][0-9a-f][0-9a-f])                __ip_match CUR        -S:                                                ;; # whole middle block?
+                (*:*:*:*:*:*:*:*)                                   __ip_match NUM -I'*:'     --radix=16 --bits=16                           ;; # last block?
+                (*:*)                                               __ip_match NUM -I'*:' -S: --radix=16 --bits=16                           ;; # middle block
+                (*)                                                 __ip_match NUM        -S: --radix=16 --bits=16 --min=0x2000 --max=0x3fff ;; # first block?
+            esac
+
+            # embedded IPv4?
+            case $__val in
+                (::*.*.*.*) __ip_match NUM -I'*.'    --radix=auto --bits=8 ;;
+                (::*:*) ;;
+                (::*)       __ip_match NUM -I'*[:.]' --radix=auto --bits=8 -S. ;;
+            esac
+
+            # complete as-is?
+            [[ ( $__val = *:*:*:*:*:*:*:*? || $__val = *::*? ) && $__val != *. ]] && __ip_match CUR -S' '
+
+        fi
+
+        if $accept_ipv4
+        then
+            __ip_debug "Looking for IPv4 address"
+            case $__val in
+                (*:*) ;;
+                (*.*.*.*)   __ip_match NUM -I'*.' --radix=auto --bits=8     ;;
+                (*)         __ip_match NUM -I'*.' --radix=auto --bits=8 -S. ;;
+            esac
+        fi
+    }
+
+    #
+    # If we are on the target word, then "succeed"
+    #
+    # Due to changes in Bash v4.4, "continue" and "break" can no longer be used
+    # in functions to control a loop that calls those functions. Therefore each
+    # match set now has to be followed by three lines, like this usage:
+    #
+    #   [other matches] || ...
+    #   { (( __optional )) && __ip_pop_state && continue ; } || ...
+    #   { __ip_match_final && break ; } ||
+    #   { __ip_match_failed && break 2 ; }
+    #
+    # (the __ip_pop_state line isn't needed for all cases, since we know which
+    # nonterminals might have a '?' prefix)
+    #
+
+    #
+    # __ip_pop_state - pop off the top 'expect' state and keep trying
+    #
+    __ip_pop_state ()
+    {
+        __ip_debug_parsing_state "MATCH-EMPTY $expecting"
+        #   'decrement cword_index and continue' will cause the match loop will
+        #   start over, testing the same word against the previous
+        #   non-terminal, adding to the possible completions computed so far
+        (( --cword_index, 1 ))  # true
+    }
+
+    #
+    # If we are on the target word, then "succeed"
+    #
+    __ip_match_final ()
+    {
+        (( cword_index == COMP_CWORD )) || return 1
+        __ip_debug_parsing_state "MATCH-LAST $expecting"
+        true
+    }
+
+    #
+    # __ip_match_failed is called when we've reached an impossible parsing
+    # state before reaching the target word. It only does cleanup & reporting,
+    # since the real point is that it's followed by 'break 2', which will cause
+    # all processing will immediately stop, and no completions to be available.
+    #
+    __ip_match_failed ()
+    {
+        __ip_debug_parsing_state "MATCH-FAILED $expecting"
+        __ip_cluck -x -s -S0 "MATCH-FAILED $expecting BACKTRACE"
+        true
+    }
+
+    __ip_match ()
+    {
+        local _w="$1" ; shift
+
+        __ip_debug_parsing_state M1 cur="$cur" exp="$(( cword_index == COMP_CWORD ))" _w="$_w"
+
+        local __set_var= __skip_seen=0 __seen_pref=
+        local __ignore_prefix= __suffix=' '
+        local __max= __min= __radix=auto __bits= __signed=0
+        local accept_link=0 accept_ipv4=0 accept_ipv6=0 \
+              accept_prefix=0 \
+              require_multicast=0 require_unicast=0
+
+        while [[ $1 = -* ]]
+        do
+            case $1 in
+                ( --bits=* )        __bits=${1#--*=} __min= __max= ;;
+                ( --max*=* )        __max=${1#--*=} ;;
+                ( --min*=* )        __min=${1#--*=} ;;
+                ( --radix=* )       __radix=${1#--*=} ;;
+                ( --signed )        __signed=1 ;;
+
+                ( -I* )             __ignore_prefix=${1#-?} ;;
+                ( -S* )             __suffix=${1#-?} ;;
+
+                ( -Fdual )          accept_ipv4=1 accept_ipv6=1 ;;
+                ( -Finet )          accept_ipv4=1 ;;
+                ( -Finet6 )         accept_ipv6=1 ;;
+                ( -Flink )          accept_link=1 ;;
+                ( -m )              require_multicast=1 ;;
+                ( -p )              accept_prefix=1 ;;
+                ( -pd )             accept_prefix=2 ;;
+
+                ( -R* )             __skip_seen=1 __seen_pref=${1#-?} __seen_pref=__ip_seen_${__seen_pref:-${expecting//[^_0-9a-zA-Z]/__}}___ ;;
+                ( -V* )             __set_var=${1#-?} __set_var=${__set_var:-_V} ;;
+                (*)                 __ip_error "Invalid option '$1' to __ip_match[$_w]" ; return 3 ;;
+            esac
+            shift
+        done
+
+        if (( __bits ))
+        then
+            # Figure out 2's complement range
+            # Avoid shifting by the entire word
+            # size, to avoid wrap-around when asking for 32-bit numbers on 32-bit
+            # machines. (Hiding <<bitshift inside a var also stops so the editor's
+            # syntax highlighter from thinking it's a heredoc.)
+            __max='(2<<__bits-1)-1'
+            (( __signed && --__bits ))
+            (( __max += 0 ))    # fix evaluation
+            (( __min += __signed && ~__max ))
+        else
+            if (( __signed ))
+            then _=${__min:=${__max:+$((-__max))}}
+            else _=${__min:=0}
+            fi
+        fi
+
+        # Cope when bounds are not representable, especially on 32-bit machines
+        (( __max >= __min )) || __min= __max=
+
+        local __cur="$cur" cur=DO-NOT-USE-THIS
+        local __val="$__cur"
+        __val=${__val##$__ignore_prefix}
+        __val=${__val%$__suffix}
+
+        __ip_debug "PRELIM-$_w $*"
+        __ip_pre_$_w "$@" || return 1
+
+        # Need to look at how _getword works
+        if (( cword_index == COMP_CWORD ))
+        then
+            __ip_debug "EXPAND-$_w $*"
+            __ip_exp_$_w "$@"
+            return 1
+        else
+            __ip_debug "CHECK-$_w $*"
+            __ip_chk_$_w "$@" || return $?
+            [[ -n $__set_var ]] && {
+                __ip_debug "SETVAR saving $_w '$__val' into $__set_var"
+                printf -v "$__set_var" %s "$__val"
+            }
+            return 0
+        fi
+    }
+
+    COMPREPLY=()
+
+    # Too hard to localize everything, so clean up from last time
+    unset ${!__ip_seen_*}
+
+    if [[ -n $COMP_VERBOSE ]]
+    then
+        if [[ -t 7 || -w /dev/fd/7 || -w /proc/self/fd/7 ]]
+        then
+            # If fd#7 is already open, assume it's dedicated for debug output
+            # ${COMP_VERBOSE_INIT=$'\e[2J'}             # basic ANSI clear-screen
+            trap "
+                    trap RETURN ;
+                    printf >&7 'Completion SEEN: %s\\n' \"\${!__ip_seen_*}\" ;
+                    printf >&7 'Completion END: COMPREPLY=(%s)\\e[49;39;0m\\n' \"\${COMPREPLY[*]}\" ;
+                " RETURN
+            printf >&7 %b "${COMP_VERBOSE_INIT:-\n################################\n}"
+        else
+            # Otherwise, assuming that we're on an Xterm or compatible, display
+            # debugging "above" the current line
+            : ${COMP_VERBOSE_TINT=$'\e[48;5;210;30m'}   # 256-colour background
+            exec 7>&2
+            printf >&7 '\e7'
+            trap "
+                    trap RETURN ;
+                    printf >&7 'Completion SEEN: %s\\nCompletion END: COMPREPLY=(%s)\\e[49;39;0m\\e8' \
+                                \"\${!__ip_seen_*}\" \"\${COMPREPLY[*]}\" ;
+                    exec 7>&- ;
+                " RETURN
+            printf >&7 '\e[A\e[999I'"${COMP_VERBOSE_TINT}"'\e[1J\e[5H'
+        fi
+        printf >&7 'Completion START: ARGS=(%s) WORDS=(%s) CWORD=%s KEY=%s LINE=(%s) POINT=%s TYPE=%s WORDBREAKS=[%s]\n' \
+                    "$*" "${COMP_WORDS[*]}" "$COMP_CWORD" "$COMP_KEY" \
+                    "$COMP_LINE" "$COMP_POINT" "$COMP_TYPE" \
+                    "${COMP_WORDBREAKS/$'\n'/\\n}"
+
+        __ip__en () { (( cword_index >= COMP_CWORD-2 )) ; }
+        __ip_debug ()
+        {
+            local e=$?
+            __ip__en && printf >&7 'Completion %s\n' "$*"
+            return $e
+        }
+        __ip_debug_parsing_state ()
+        {
+            local e=$? tag=$1
+            shift
+            __ip__en &&
+            printf >&7 'Completion STATE %s word[%s]=%s expecting=%s and-then=%s {%s}\n' \
+                       "$tag" "$cword_index" "$cur" "$expecting" "$STATE" "$*"
+            return $e
+        }
+        __ip_error ()
+        {
+            local e=$?
+            printf >&7 'Completion ERROR %s\n' "$*"
+            return $e
+        }
+        __ip_warning ()
+        {
+            local e=$?
+            printf >&7 'Completion WARNING %s\n' "$*"
+            return $e
+        }
+    else
+        trap ' unset ${!__ip_seen_*} ' RETURN
+        __ip_debug () { return $? ; }
+        __ip_debug_parsing_state () { return $? ; }
+        __ip_error ()
+        {
+            local e=$?
+            local t="  $*"
+            local l=${#t}
+            printf >&2 '\e[1K\e[33m%s\e[39m\e[%uD' "$t" "$l"
+            return $e
+        }
+        __ip_warning () { return $? ; }
+    fi
+
+    local __perform_expansion=0
+    for STATE in START
+    do  # {{{
+        # singleton outer "loop", so that "break 2" works in the inner loop
+        for (( cword_index = 1 ; cword_index <= COMP_CWORD ; cword_index++ )) do    # {{{
+
+            (( cword_index == COMP_CWORD )) && __perform_expansion=1
+            cur=${COMP_WORDS[cword_index]}
+
+            __ip_debug_parsing_state P1
+
+            [[ -n $want ]] && __ip_match ANY "$want" && break
+
+            want=
+
+            __ip_debug_parsing_state P2
+
+            local _V expecting=${STATE##*/}
+            STATE=${STATE%/*}
+
+            local -a _S=()
+            local __optional=
+
+            [[ $expecting = '='* ]] && want=${expecting#=} expecting=${STATE##*/} STATE=${STATE%/*}
+
+            [[ $expecting = '?'* ]] && __optional=1 expecting=${expecting#'?'}
+
+            __ip_debug_parsing_state P3 ${want:+want=$want} ${__optional:+optional=$__optional}
+
+            case $expecting in  # {{{
+
+                (START)
+                    __ip_match ANY -R -V \
+                               addr address=addr addrlabel link maddr monitor \
+                               mroute neigh ntable route rule tunnel \
+                               xfrm \
+                               -0='-family link' -4='-family inet' -6='-family inet6' \
+                               -B='-family bridge' -D='-family decnet' -I='-family ipx' \
+                               -batch      --batch=-batch           \
+                               -details    --details=-details       \
+                               -family     --family=-family         \
+                               -oneline    --oneline=-oneline       \
+                               -resolve    --resolve=-resolve       \
+                               -statistics --statistics=-statistics \
+                               -timestamp  --timestamp=-timestamp   \
+                               -Version    --Version=-Version       ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P4
+                    case $_V in # {{{
+                            (-*family)  STATE+=/FAMILY ;;
+                            (-0)        save_family=-Flink      __ip_seen___family=1 ;;
+                            (-4)        save_family=-Finet      __ip_seen___family=1 ;;
+                            (-6)        save_family=-Finet6     __ip_seen___family=1 ;;
+                            (-B)        save_family=-Fbridge    __ip_seen___family=1 ;;
+                            (-D)        save_family=-Fdecnet    __ip_seen___family=1 ;;
+                            (-I)        save_family=-Fipx       __ip_seen___family=1 ;;
+                            (-batch)    STATE+=/BATCHFILE ;;
+                            (-* | '') ;;
+                            (*)         STATE=$_V ;;
+                    esac    # }}}
+                    ;;
+
+                (BATCHFILE)
+                    save_batchfile=$cur
+                    ;;
+
+                (FAMILY)
+                    __ip_match ANY -V dnet inet inet6 ipx link ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P5
+                    save_family=-F$_V
+                    ;;
+
+                (addr)
+                    __ip_match ANY -V add change delete flush list=show lst=show monitor replace show ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P6
+                    STATE+="+$_V"
+                    case $_V in
+                        (add | change | delete | replace)   STATE+="/=dev/?PREFIX" ;;
+                        (flush | list | show) ;;
+                        (get)                               STATE+="/ADDR" ;;
+                    esac
+                    ;;
+
+                (addr+*)
+                    case ${expecting#*+} in
+                        (add | change | replace)    __ip_match ANY -R -V anycast broadcast deprecated dev dynamic home label nodad peer permanent preferred_lft primary scope secondary tentative to valid_lft ;;
+                        (flush | list | show)       __ip_match ANY -R -V anycast broadcast deprecated dev dynamic home label nodad peer permanent               primary scope secondary tentative to ;;
+                        (delete)                    __ip_match ANY -R -V                              dev ;;
+                        (*)                         false ;;
+                    esac ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P7
+                    case $_V in
+                        (anycast | broadcast)       STATE+=/ADDR        ;;
+                        (dev)                       STATE+=/DEVICE      ;;
+                        (label)                     STATE+=/LABEL       ;;
+                        (preferred_lft | valid_lft) STATE+=/LIFETIME    ;;
+                        (peer | to)                 STATE+=/PREFIX      ;;
+                        (scope)                     STATE+=/SCOPE       ;;
+                        (deprecated | dynamic | home | nodad | permanent | primary | secondary | tentative) ;;
+                    esac
+                    (( ! __ip_seen_PREFIX )) && STATE+=/?PREFIX
+                    ;;
+
+                (addrlabel)
+                    __ip_match ANY -V list add delete flush lst=list show=list ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P8 $_V
+                    STATE+=+$_V
+                    ;;
+
+                (addrlabel+list)
+                    # no args allowed
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (addrlabel+*)
+                    __ip_match ANY -V -R prefix dev label ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P9 $_V
+                    case $_V in
+                        (prefix)    STATE+=/PREFIX ;;
+                        (dev)       STATE+=/DEVICE ;;
+                        (label)     STATE+=/NUMBER ;;
+                    esac
+                    ;;
+
+                (link)
+                    __ip_match ANY -V add delete list=show lst=show set show ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P10
+                    STATE+=+$_V
+                    case $_V in
+                        (add)                           STATE+=/=link ;;
+                        (delete | set | show | list)    STATE+=/DEVICE ;;
+                    esac
+                    ;;
+
+                (link+add)
+                    __ip_match ANY -R -V addr address=addr broadcast link mtu name txqueuelen ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P11
+                    case $_V in
+                        (addr | broadcast)  STATE+=/LLADDR ;;
+                        (link)              STATE+=/DEVICE ;;
+                        (mtu | txqueuelen)  STATE+=/NUMBER ;;
+                        (name)              STATE+=/NAME ;;
+                        (type)              STATE+=$_V+type ;;
+                    esac
+                    ;;
+
+                (link+delete)
+                    __ip_match ANY -R -V addr address=addr broadcast link mtu name txqueuelen ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P12
+                    case $_V in
+                        (link)  STATE+=/DEVICE ;;
+                        (type)  STATE+=+$_V+type ;;
+                    esac
+                    ;;
+
+                (link+set)
+                    __ip_match ANY -V addr address=addr alias allmulticast arp broadcast down dynamic mtu multicast name netns promisc trailers txqueuelen up vf ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P13
+                    case $_V in
+                        (addr | broadcast)  STATE+=/LLADDR      ;;
+                        (alias)             STATE+=/NAME        ;;
+                        (allmulticast | arp | dynamic | multicast | promisc | trailers)
+                                            STATE+=/ONOFF ;;
+                        (mtu)               STATE+=/NUMBER32    ;;
+                        (name)              STATE+=/NAME        ;;
+                        (netns)             STATE+=/NUMBER16    ;;
+                        (txqueuelen)        STATE+=/NUMBER8     ;;
+                        (up | down) ;;
+                        (vf)                STATE+=+vf/NUMBER   ;;
+                    esac
+                    ;;
+
+                (link+set+vf)
+                    __ip_match ANY -R -V mac qos rate vlan ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P14
+                    case $_V in
+                        (mac)   STATE+=/LLADDR ;;
+                        (qos)   STATE+=/NUMBER8 ;;
+                        (rate)  STATE+=/RATE ;;
+                        (vlan)  STATE=link+set+VLAN/=id ;;
+                    esac
+                    ;;
+
+                (link+set+VLAN)
+                    __ip_match ANY -R -V id gvrp loose_binding reorder_hdr \
+                                         ingress-qos-map egress-qos-map ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P15
+                    case $_V in
+                        (id)            STATE+=/NUM:1:4095 ;;
+                        (gvrp | loose_binding | reorder_hdr)
+                                        STATE+=/ONOFF ;;
+                        (*qos-map)      STATE+=/QOSMAP ;;
+                    esac
+                    ;;
+
+                (link+show | link+list)
+                    STATE=FINISH
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P16
+                    ;;
+
+                (link+*+type)
+                    __ip_match ANY -V can dummy ifb macvlan vcan veth vlan ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P17
+                    STATE+=+$_V
+                    ;;
+
+                (link+*+type+can)
+                    __ip_match ANY -R -V berr-reporting bitrate listen-only loopback one-shot phase-seg1 phase-seg2 \
+                                         prop-seg restart restart-ms sample-point sjw tq triple-sampling ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P18
+                    case $_V in
+                        (restart) ;;
+                        (bitrate)       STATE+=/NUM:1:1000000 ;;
+                        (restart-ms)    STATE+=/NUMBER ;;
+                        (tq)            STATE+=/NUMBER ;;
+                        (sample-point)  STATE+=/FLOAT ;;  # SAMPLE-POINT
+                        (phase-seg[12] | prop-seg)
+                                        STATE+=/NUM:1:8 ;;
+                        (sjw)           STATE+=/NUM:1:4 ;;
+                        (berr-reporting | listen-only | loopback | one-shot | triple-sampling)
+                                        STATE+=/ONOFF ;;
+                    esac
+                    ;;
+
+                (link+*+type+dummy)
+                    ;;
+
+                (link+*+type+ifb)
+                    ;;
+
+                (link+*+type+macvlan)
+                    ;;
+
+                (link+*+type+vcan)
+                    ;;
+
+                (link+*+type+veth)
+                    ;;
+
+                (link+*+type+vlan)
+                    ;;
+
+                (maddr)
+                    __ip_match ANY -V show add delete list=show lst=show ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P19
+                    STATE+=+$_V
+                    case $_V in
+                        (add | delete) ;;
+                        (list | show) ;;
+                    esac
+                    ;;
+
+                (maddr+*)
+                    __ip_match ANY -R -V dev ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P20
+                    case $_V in
+                        (dev) STATE+=/DEVICE ;;
+                    esac
+                    ;;
+
+                (monitor)
+                    __ip_match ANY -V all addr link maddr mroute neigh ntable route rule tunnel xfrm ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P21
+                    STATE=FINISH  # no more args
+                    ;;
+
+                (mroute)
+                    __ip_match ANY -V show list=show lst=show ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P22
+                    STATE+=+$_V
+                    case $_V in
+                        (show | list)   STATE+=/PREFIX0 ;;
+                    esac
+                    ;;
+
+                (mroute+show)
+                    __ip_match ANY -V from iif ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P23
+                    case $_V in
+                        (from)  STATE+=/PREFIX0 ;;
+                        (iif)   STATE+=/DEVICE ;;
+                    esac
+                    ;;
+
+                (neigh)
+                    __ip_match ANY -V show add change delete flush list=show lst=show replace ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P24
+                    STATE+=+$_V
+                    case $_V in
+                        (add | change | delete | replace)   STATE+=/ADDR ;;
+                        (flush | list | show) ;;
+                    esac
+                    ;;
+
+                (neigh+*)
+                    __ip_match ANY -R -V dev lladdr nud to ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                {
+                    __ip_debug_parsing_state P25
+                    case $_V in
+                        (dev)       STATE+=/DEVICE ;;
+                        (lladdr)    STATE+=/LLADDR ;;
+                        (nud)       STATE+=/NUDSTATE ;;
+                        (to)        STATE+=/PREFIX0 ;;
+                    esac
+                }
+                    ;;
+
+                (ntable)
+                    __ip_match ANY -V change ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                {
+                    __ip_debug_parsing_state P26
+                    STATE+=+$_V
+                }
+                    ;;
+
+                (route)
+                    __ip_match ANY -V add append change delete flush get \
+                                      list lst=list show=list replace ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                {
+                    __ip_debug_parsing_state P27
+                    case $_V in
+                        (add | append | change | replace)   STATE+=+A/=dev/PREFIX0/route+R ;;
+                        (delete)                            STATE+=+A/=dev/PREFIX0/route+R ;;
+                        (get)                               STATE+=+G/ADDR ;;
+                        (flush | list | show)               STATE+=+L ;;
+                    esac
+                }
+                    ;;
+
+                (route+R)
+                    __ip_match ANY -V blackhole==RTYPE broadcast==RTYPE \
+                                      local==RTYPE multicast==RTYPE \
+                                      nat==RTYPE prohibit==RTYPE \
+                                      throw==RTYPE unicast==RTYPE \
+                                      unreachable==RTYPE ||
+                    # switch the following block to __ip_match_OPTIONAL
+                    {
+                        __ip_debug_parsing_state M∅1 "Empty, trying same word in next state ($LINENO)"
+                        (( --cword_index ))
+                        continue
+                        #return $EX_RETRY
+                    } && {
+                        __ip_debug_parsing_state P28
+                        STATE=route+A
+                    }
+                    ;;
+
+                (route+A)
+                    __ip_match ANY -V blackhole==RTYPE broadcast==RTYPE \
+                                      default dev iif local==RTYPE \
+                                      multicast==RTYPE nat==RTYPE \
+                                      oif=dev prohibit==RTYPE \
+                                      throw==RTYPE unicast==RTYPE \
+                                      unreachable==RTYPE via weight ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                {
+                    case $_V in
+                        (default)           STATE+= ;;
+                        (via)               STATE+=/ADDR ;;
+                        (dev | iif | oif)   STATE+=/DEVICE ;;
+                        (weight)            STATE+=/NUMBER ;;
+                        (blackhole)         STATE+=/PREFIX0 ;;
+                        (broadcast)         STATE+=/PREFIX0 ;;
+                        (local)             STATE+=/PREFIX0 ;;
+                        (multicast)         STATE+=/PREFIX0 ;;
+                        (nat)               STATE+=/PREFIX0 ;;
+                        (prohibit)          STATE+=/PREFIX0 ;;
+                        (throw)             STATE+=/PREFIX0 ;;
+                        (unicast)           STATE+=/PREFIX0 ;;
+                        (unreachable)       STATE+=/PREFIX0 ;;
+                    esac
+                }
+                    ;;
+
+                (route+L)
+                    __ip_match ANY -V exact match proto root scope table type ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                {
+                    __ip_debug_parsing_state P29
+                    case $_V in
+                        (exact)         STATE+=/PREFIX0 ;;
+                        (match)         STATE+=/PREFIX0 ;;
+                        (proto)         STATE+=/RTPROTO ;;
+                        (root)          STATE+=/PREFIX0 ;;
+                        (scope)         STATE+=/SCOPE   ;;
+                        (table)         STATE+=/TABLE+  ;;
+                        (type)          STATE+=/RTYPE   ;;
+                    esac
+                }
+                    ;;
+
+                (route+G)
+                    __ip_match ANY -V from oif tos ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P30
+                    case $_V in
+                        (from)              STATE+=/=iif/ADDR   ;;
+                        (dev | iif | oif)   STATE+=/DEVICE      ;;
+                        (tos)               STATE+=/TOS         ;;
+                    esac
+                    ;;
+
+                (route+P)
+                    # ROUTE -> NODE_SPEC -> [RTYPE] PREFIX
+                    __ip_match ANY -V advmss cwnd dev equalize initcwnd metric mtu nexthop oif=dev proto realms rto_min rtt rttvar scope src ssthresh table tos via weight window ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P31
+                    case $_V in
+                        (advmss | weight)           STATE+=/NUMBER16 ;;
+                        (cwnd | initcwnd | mtu)     STATE+=/NUMBER32 ;;
+                        (dev)                       STATE+=/DEVICE  ;;
+                        (equalize | onlink | pervasive) ;;
+                        (metric)                    STATE+=/NUMBER31S ;;
+                        (nexthop)                   unset ${!__ip_seen_*} ;;  # reset the "already seen" list
+                        (proto)                     STATE+=/RTPROTO ;;
+                        (realms)                    STATE+=/REALM   ;;  # TODO maybe this should be REALMPAIR?
+                        (rto_min | rtt | rttvar)    STATE+=/TIME    ;;
+                        (scope)                     STATE+=/SCOPE   ;;
+                        (src | via)                 STATE+=/ADDR    ;;
+                        (ssthresh)                  STATE+=/NUMBER  ;;
+                        (table)                     STATE+=/TABLE   ;;
+                        (tos)                       STATE+=/TOS     ;;
+                        (window)                    STATE+=/NUMBER8 ;;
+                    esac
+                    ;;
+
+                (rule)
+                    __ip_match ANY -V add delete flush list lst=list show=list ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P32
+                    STATE+=+$_V
+                    ;;
+
+                (rule+list)
+                    __ip_match ANY '# no more args allowed' ' ' ||  # no args allowed
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (rule+*)
+                    __ip_match ANY -R -V dev from fwmark goto iif=dev lookup not pref prio prohibit realms reject table to tos unreachable ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P33
+                    case $_V in
+                        (dev)                   STATE+=/DEVICE  ;;
+                        (from | to)             STATE+=/PREFIX0 ;;
+                        (fwmark)                STATE+=/FWMARK+MASK ;;
+                        (goto | pref | prio)    STATE+=/NUMBER  ;;
+                        (lookup | table)        STATE+=/TABLE   ;;
+                        (not | prohibit | reject | unreachable) ;;
+                        (realms)                STATE+=/REALMPAIR ;;
+                        (tos)                   STATE+=/TOS     ;;
+                    esac
+                    ;;
+
+                (tunnel)
+                    __ip_match ANY -V 6rd add change delete list=show lst=show prl show ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    STATE+=+$_V/=name
+                    ;;
+
+                (tunnel+*)
+                    case $expecting in
+                        (*+6rd) __ip_match ANY -R -V 6rd-prefix 6rd-relay_prefix 6rd-reset ;;
+                        (*+prl) __ip_match ANY -R -V prl-default prl-delete prl-nodefault ;;
+                        (*) false ;;
+                    esac ||
+                    __ip_match ANY -R -V dev icsum ikey iseq local mode \
+                                         nopmtudisc==pmtudisc ocsum oif=dev \
+                                         okey oseq pmtudisc remote tos ttl ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_debug_parsing_state P34
+                    case $_V in
+                        (icsum | iseq | ocsum | oseq | nopmtudisc | pmtudisc) ;;
+                        (6rd-reset) ;;
+                        (6rd-* | local | prl-* | remote)
+                                        STATE+=/ADDR    ;;
+                        (dev | oif)     STATE+=/DEVICE  ;;
+                        (ikey | okey)   STATE+=/KEY     ;;
+                        (mode)          STATE+=/TMODE   ;;
+                        (name)          STATE+=/NAME    ;;
+                        (tos)           STATE+=/TOS     ;;
+                        (ttl)           STATE+=/TTL     ;;
+                    esac
+                    ;;
+
+                (KEY)
+                    __ip_match ADDR -Finet ||
+                    __ip_match NUM ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (TOS)
+                    __ip_match NUM -V ||
+                    __ip_match ANY inherit ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (TTL)
+                    __ip_match NUM -V --min=1 --max=255 ||
+                    __ip_match ANY inherit ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (TMODE)
+                    __ip_match ANY ipip gre sit ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (xfrm)
+                    __ip_match ANY -V policy state monitor ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    STATE+=+$_V
+                    ;;
+
+                (xfrm+*)
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    # TODO
+                    ;;
+
+                (NAME)
+                    __ip_match ANY "$cur " "$cur..." ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_seen_NAME=true
+                    ;;
+
+                (ADDR)
+                    __ip_match ADDR $save_family ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (MADDR)
+                    __ip_match ADDR $save_family -m ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (LLADDR)
+                    __ip_match ADDR -Flink ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (PREFIX0)
+                    __ip_match ADDR $save_family -p ||
+                    __ip_match ANY default ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_seen_PREFIX=true
+                    ;;
+
+                (PREFIX)
+                    __ip_match ADDR $save_family -p ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    __ip_seen_PREFIX=true
+                    ;;
+
+                (DEVICE)
+                    __ip_match ANY -Vsave_device $( __ip_list_of_devices ) ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (FWMARK+MASK)
+                    case $cur in
+                        (*/*/*) false ;;
+                        (*)     __ip_match NUM -I'*/' --bits=32 ;;
+                    esac ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (LIFETIME)
+                    __ip_match ANY forever ||
+                    __ip_match NUM --bits=8 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUDSTATE)
+                    __ip_match ANY noarp permanent reachable stale ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUM:*:*)
+                    max_num=${expecting#NUM:}
+                    min_num=${max_num%:*} max_num=${max_num#*:}
+                    __ip_match NUM --min=$min_num --max=$max_num ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUM:*)
+                    __ip_match NUM --max=${expecting##*:} ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER)
+                    __ip_match NUM ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER8)
+                    __ip_match NUM --bits=8 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER16)
+                    __ip_match NUM --bits=16 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER32)
+                    __ip_match NUM --bits=32 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER31S)
+                    __ip_match NUM --bits=32 --signed ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (NUMBER?*)
+                    __ip_match NUM --bits=${expecting#NUMBER} ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (ONOFF)
+                    __ip_match ANY on off ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (QOSMAP)
+                    case $cur in
+                        (*[^0-9:]* | *:*:*) false ;;
+                        (*)                 __ip_match NUM -I'*:' ;;
+                    esac ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (REALMPAIR)
+                    case $cur in
+                        (*/*/*) false ;;
+                        (*)     __ip_match NUM -I'*/' --bits=8 ||
+                                __ip_match ANY -C${cur#*/} $( __ip_slurp /etc/iproute2/rt_realms ) ;;
+                    esac ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (REALM)
+                    __ip_match NUM --bits=8 ||
+                    __ip_match ANY $( __ip_slurp /etc/iproute2/rt_realms ) ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (SCOPE)
+                    __ip_match NUM --bits=8 ||
+                    __ip_match ANY $( __ip_slurp /etc/iproute2/rt_scopes ) ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (LABEL)
+                    __ip_match ANY $save_device: ||
+                    true
+                    ;;
+
+                (TABLE)
+                    __ip_match NUM --bits=8 ||
+                    __ip_match ANY default local main $( __ip_slurp /etc/iproute2/rt_tables ) ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (TABLE+)
+                    __ip_match NUM --max=255 --min=-2 ||
+                    __ip_match ANY all default local main $( __ip_slurp /etc/iproute2/rt_tables ) ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (RTYPE)
+                    __ip_match ANY -R blackhole==RTYPE broadcast==RTYPE \
+                                      local==RTYPE multicast==RTYPE \
+                                      nat==RTYPE prohibit==RTYPE \
+                                      throw==RTYPE unicast==RTYPE \
+                                      unreachable==RTYPE ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (RTPROTO)
+                    __ip_match ANY -R boot==RTPROTO kernel==RTPROTO static==RTPROTO ||
+                    __ip_match NUM --bits=8 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (TOS)
+                    __ip_match ANY inherit ||
+                    __ip_match NUM --bits=8 ||
+                    { (( __optional )) && __ip_pop_state && continue ; } ||
+                    { __ip_match_final && break ; } ||
+                    { __ip_match_failed && break 2 ; }
+                    ;;
+
+                (*)
+                    __ip_error "Lost sync? STATE=$STATE expect=$expecting cur=$cur"
+                    __ip_deferred
+                    return
+                    ;;
+
+            esac    # }}}
+
+            __ip_debug_parsing_state P35
+
+        done    # }}}
+
+        __ip_debug "COMPREPLY=[${COMPREPLY[*]}] (after compgen)"
+
+        (( ${#COMPREPLY[@]} == 0 )) && __ip_warning "No matches for '$cur'"
+
+        # completion treats some punctuation as if they were word-separators, and appends to current word rather than replacing it
+        if [[ -n "$COMP_WORDBREAKS" && $cur = *[$COMP_WORDBREAKS]* ]]
+        then
+            local rword_index
+            cur="${cur%"${cur##*[$COMP_WORDBREAKS]}"}"
+            for (( rword_index = 0 ; rword_index < ${#COMPREPLY[@]} ; rword_index++ )) do
+                COMPREPLY[rword_index]="${COMPREPLY[rword_index]#"$cur"}"
+            done
+        fi
+
+        __ip_deferred
+        return 0
+    done    # }}} end singleton loop
+    COMPREPLY=()
+    __ip_debug_parsing_state X '***ABORT***'
+    #__ip_warning "Lost sync? STATE=$STATE expect=$expecting cur=$__cur"
+
+    [[ $COMP_TYPE = best ]] && COMP_TYPE=9
+
+    __ip_deferred
+    return 1
+}
+
+complete -F _ip -o nospace ip io ip4 ip6 iop ipo oip
+
+#
+# This is an improved version of _configured_interfaces from
+# /etc/bash_completion + /usr/share/bash-completion/bash_completion that
+# chooses the system type just once, not every time.
+#
+_configured_interfaces ()
+{
+    if [[ -f /etc/network/interfaces ]] ; then
+        # Debian system (-f /etc/debian_version)
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( sed -ne 's/^ *iface \+\([^ ]\+\).*$/\1/p' /etc/network/interfaces ) )
+        }
+    elif [[ -d /etc/sysconfig/network ]] ; then
+        # SuSE system (-f /etc/SuSE-release)
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( command ls /etc/sysconfig/network/ifcfg-* |
+                           sed -ne 's|.*ifcfg-\('$cur'.*\)|\1|p' ) )
+        }
+    elif [[ -f /etc/sysconfig/interfaces ]] ; then
+        # PLD Linux -f /etc/pld-release
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( command ls -B /etc/sysconfig/interfaces |
+                           sed -ne 's|.*ifcfg-\('$cur'.*\)|\1|p' ) )
+        }
+    elif [[ -d /etc/sysconfig/network-scripts ]] ; then
+        # Red Hat
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( command ls /etc/sysconfig/network-scripts/ifcfg-* |
+                           sed -ne 's|.*ifcfg-\('$cur'.*\)|\1|p' ) )
+        }
+    elif type > /dev/null -P ip ; then
+        # Actual live interfaces, as per iproute2
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( ip -o link show | sed -e 's/^[0-9]*[: ]*//; s/[: ].*//;' ) )
+        }
+    elif type > /dev/null -P ifconfig ; then
+        # Actual live interfaces, as per classic ifconfig
+        _configured_interfaces ()
+        {
+            COMPREPLY=( $( ifconfig -a | sed -e 's/ .*//; /./! d;' ) )
+        }
+    elif [[ -d /sys/class/net && -r /sys/class/net ]]; then
+        # Read directly from Linux /sys
+        _configured_interfaces ()
+        {
+            COMPREPLY=( /sys/class/net/* )
+            COMPREPLY=( "${COMPREPLY[@]##*/}" )
+        }
+    else
+        _configured_interfaces ()
+        {
+            COMPREPLY=()
+        }
+    fi
+    _configured_interfaces "$@"
+}

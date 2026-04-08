@@ -1,0 +1,32 @@
+# Adjust the prompt so that it's always at the left margin, even when a
+# command's output does not finish with a newline.
+
+case 3 in
+ 1)
+    prompt_flushleft() { :;}
+    shopt -s checkwinsize   # sets COLUMNS
+    printf -v _MissingEOL '%-*.*s' $COLUMNS $COLUMNS '<<< missing EOL'
+    PS1='\[\e[1;7;31m$_MissingEOL\r\e[m\e[2K\]'"$PS1"
+    ;;
+
+ 2)
+    prompt_flushleft() {
+        shopt -s checkwinsize   # sets COLUMNS
+        printf -v _MissingEOL '%-*.*s' $COLUMNS $COLUMNS '<<< missing EOL'
+    }
+    [[ $PROMPT_COMMAND = *prompt_flushleft* ]] ||
+    PROMPT_COMMAND+=$'\n  prompt_flushleft\n'
+    PS1='\[\e[1;7;31m$_MissingEOL\r\e[m\e[2K\]'"$PS1"
+    ;;
+
+ *)
+    _MissingEOL='<<< missing EOL'
+    prompt_flushleft() {
+        shopt -s checkwinsize   # sets COLUMNS
+        printf '\e[1;7;31m%-*.*s\r\e[m\e[2K' $COLUMNS $COLUMNS "$_MissingEOL"
+    }
+    [[ $PROMPT_COMMAND = *prompt_flushleft* ]] ||
+    PROMPT_COMMAND+=$'\n  prompt_flushleft\n'
+    ;;
+
+esac

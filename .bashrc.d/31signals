@@ -1,0 +1,1 @@
+PROMPT_COMMAND+=$'\n trap : SIGINT SIGQUIT'

@@ -1,0 +1,6 @@
+if  [[ -h $HOME/tmp ]] &&
+    t=$( readlink "$HOME/tmp" ) &&
+    [[ $t = /run/* && ! -d $t ]]
+then
+    mkdir -vp "$t"
+fi

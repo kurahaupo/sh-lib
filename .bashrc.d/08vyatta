@@ -1,0 +1,5 @@
+[[ -e /etc/bash_completion.d/vyatta-cfg ]] || return
+
+# Unmangle stuff done by the Vyatta /etc/bashrc in an EdgeRouter-X
+
+bind '"?":self-insert'

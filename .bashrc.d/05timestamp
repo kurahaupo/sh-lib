@@ -1,0 +1,97 @@
+
+# Make SECONDS count since epoch rather than since login.
+# Make DATETIME track YYYYMMDDhhmmss
+#
+# (Use $((SECONDS-STARTTIME)) to get seconds since login.)
+
+# Uses features which are version-dependent; for some versions of Bash, this
+# may need to use PROMPT_COMMAND
+
+if [[ -n $SECONDS ]] && ((SECONDS < 1500000000)) ; then
+    # (If SECONDS ≥ 1500000000 then these have probably already been set)
+
+    # Adapt to different versions of bash: avoid external an command and/or
+    # subshell if at all possible, to reduce lag
+
+    if (( BASH_VERSINFO[0] >= 5 || BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 )) ; then
+        # need version ≥ 4.2 to support printf '%(...)T'
+        printf -v STARTTIME '%(%s)T' -2
+        printf -v SECONDS '%(%s)T' -1
+        _set_datetime () {
+            printf -v DATETIME '%(%Y%m%d%H%M%S)T' -1
+        }
+    elif
+        # prior to v4.2, printf lacked the %(…)T format specifier
+        STARTTIME=$SECONDS SECONDS=$( date +%s )
+        ((STARTTIME=SECONDS-STARTTIME))  # backdated to whatever $SECONDS was before
+        _set_datetime2 () {
+            local k mo
+            # 719468 == number of days from 1 Mar 1 BCE (proleptic Gregorian
+            #           calendar) to 1 Jan 1970 CE
+            #        == 146097*2000/400 - (days from 1 Jan 1970 to 1 Mar 2000)
+            # This works correctly for any date in the Gregorian Epoch, but
+            # we need to adjust for the timezone.
+
+            # Calculation of century-mod-4 and year-mod-4 are complicated
+            # because the last year of each period has 1 too many days, so mod
+            # days-per-four-cycles divided by days-per-cycle gives 4 rather
+            # than 3 for 29 Feb of the last year. We can either make use of the
+            # fact that division rounds towards zero, like this:
+            #   → r = (d - 146095) / 36524 + 3
+            #   → r = (d - 1460) / 365 + 3
+            # or simply check after the fact, like this:
+            #   → r = d / 36524, r -= r >> 2    } (4>>2)==1
+            #   → r = d / 365,   r -= r > 3     } (4>3)==1
+            #                    r > 3 && --r   }
+            #                    r > 3 && (r=3) }
+
+            ((
+                t = _datetime_timezone, t -= t / 100 * 40, t *= 60,
+                t += SECONDS,
+                d  = t / 86400 + 719468,    t %=   86400,
+                mo = d / 146097 * 4800,     d %=   146097,
+                  k = d / 36524, k -= k > 3,
+                mo+= k          * 1200,     d -= k*36524,
+                mo+= d / 1461   * 48,       d %=   1461,
+                  k = d / 365, k -= k > 3,
+                mo+= k          * 12,       d -= k*365,
+                mo+= d / 153    * 5,        d %=   153,
+                mo+= d / 61     * 2,        d %=   61,
+                mo+= d / 31 + 2,            d %=   31,
+                d += (mo + mo / 12 * 88) * 100 + 101,
+                t += t / 60   * 40,
+                t += t / 6000 * 4000
+            ))
+        }
+        (( BASH_VERSINFO[0] == 4 ))
+    then
+        # need version ≥ 4.0 to support printf -v VAR
+        _set_datetime () {
+            local d t
+            _set_datetime2
+            printf -v DATETIME '%08u%06u' "$d" "$t"
+        }
+    else
+        # prior to v4.0, printf lacked the -v VAR option
+
+        # Format %-z is a GNU extension that prints the timezone offset as
+        # ±HHMM but with leading zeros removed.
+        _datetime_timezone=$( date +%-z )
+        _set_datetime () {
+            local d t
+            _set_datetime2
+            t=000000$t
+            DATETIME=$d${t:${#t}-6}
+        }
+    fi
+    PROMPT_COMMAND+=$'\n _set_datetime'
+    declare -r STARTTIME
+
+  # if (( 10#${BASH_VERSION%%.*} < 3 )) || (( BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 1 )) ; then
+  #     # ancient versions of bash not supported at all
+  #     # prior to v3.1, VAR+=extra was not supported
+  #     :
+  # else
+  #     :
+  # fi
+fi

@@ -1,0 +1,8 @@
+: "STARTING ~/.bash_completion"
+
+for _p in ~/.bash_completion.d/*
+do
+    [[ $_p != *~ && $_p != .*.sw? && $_p && -r $_p ]] && . $_p
+done
+
+: "FINISHED ~/.bash_completion"

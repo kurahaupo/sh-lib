@@ -1,0 +1,14 @@
+## GENERAL SETTINGS
+
+nolinks=yes
+set -o noclobber -o physical
+
+# bash v3 got rid of '%' meaning 'current job' (v4 brought it back)
+(( 10#${BASH_VERSION%%.*} == 3 )) && alias %=%+
+# checkwinsize: check the window size after each command and, if necessary, update the values of LINES and COLUMNS.
+(( 10#${BASH_VERSION%%.*} >= 2 )) && shopt -s checkwinsize
+
+if (( BASH_VERSINFO[0] >= 4 )) && [[ ${BASH_VERSINFO[*]} != '4 1 0 2 release mipsel-unknown-linux-gnu' ]] ; then
+    # bash v4 doesn't have checkjobs on by default
+    shopt -s checkjobs
+fi

@@ -1,0 +1,4 @@
+
+
+# eval 'vi() { command '"${VISUAL:=${EDITOR:=vim}}"' "$@" ; }'
+#vi() { "${VISUAL:=${EDITOR:=$( type -P vim )}}" "$@" ; }

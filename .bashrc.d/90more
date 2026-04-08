@@ -1,0 +1,4 @@
+# text tools
+
+more() { echo >&2 Try: less; return 99; }
+#qqgrep() { grep -hE "$@" ~/Quakers/db/ARCHIVE/20??/*csv ~/Quakers/db/*-????????.csv | uniq -c; }

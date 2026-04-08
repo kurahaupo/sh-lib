@@ -1,0 +1,8 @@
+#
+# Do parameter expansion for "rx" exactly the same way as for ssh
+#
+eval "$(
+    F=($( complete -p ssh 2> /dev/null ) ) &&
+    (( ${#F[@]} )) &&
+    printf '%q ' "${F[@]:0:${#F[@]}-1}" rx
+)"
