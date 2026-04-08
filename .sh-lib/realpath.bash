@@ -88,7 +88,7 @@ else
     # by using ‘pwd -P’ which is built into Bash.
     realpath () {
         if [[ $1 != -* ]] && (($# < 2)) && [[ -d $1 ]]
-        then ( CDPATH=. cd -P -- "$1" ; pwd -P )
+        then ( CDPATH=. builtin cd -P -- "$1" && builtin pwd -P )
         else command realpath "$@"
         fi
     }
