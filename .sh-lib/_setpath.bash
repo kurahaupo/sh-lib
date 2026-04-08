@@ -180,7 +180,18 @@ EOM
             else xrel=rel
             fi
             # Resolve symlinks, if requested
-            if (( realpath ))
+            if (( realpath )) &&
+                if (( if_notlink ))
+                then [[ ! -h "$elem" ]]
+                fi &&
+                if (( if_exist ))
+                then [[ -e "$elem" ]]
+                elif (( if_dir || if_file || if_link ))
+                then
+                    { (( if_dir   )) && [[ -d "$elem" ]] ; } ||
+                    { (( if_file  )) && [[ -f "$elem" ]] ; } ||
+                    { (( if_link  )) && [[ -h "$elem" ]] ; }
+                fi
             then
                 elem=$( realpath "$elem" ) || {
                     echo >&2 ERROR: could not resolve symlink
@@ -206,12 +217,10 @@ EOM
             if [[ $xrel = abs ]]
             then
                 if (( if_notlink ))
-                then
-                    [[ ! -h "$elem" ]]
+                then [[ ! -h "$elem" ]]
                 fi &&
                 if (( if_exist ))
-                then
-                    [[ -e "$elem" ]]
+                then [[ -e "$elem" ]]
                 elif (( if_dir || if_file || if_link ))
                 then
                     { (( if_dir   )) && [[ -d "$elem" ]] ; } ||

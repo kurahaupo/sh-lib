@@ -5,6 +5,6 @@
 . $HOME/.sh-lib/require.bash _setpath
 
 _setpath PATH --if-dir --use-hosttype --real-path \
-            --prefix /sbin /usr/sbin /usr/local/sbin /opt/*/sbin ~/sbin \
-            --append /bin  /usr/bin  /usr/local/bin  /opt/*/bin  ~/bin \
-                     /snap/bin /opt/android-studio/bin
+            --prefix /sbin /usr/sbin /opt/*/sbin /opt/sbin /usr/local/sbin ~/sbin \
+            --append /bin  /usr/bin  /opt/*/bin  /opt/bin  /usr/local/bin  ~/bin \
+                     /snap/bin
