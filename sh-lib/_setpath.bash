@@ -25,7 +25,7 @@ Options include:
    --allow-dot, --allow-empty                   Take "." or "" as given but synonymous
    --avoid-dot, --force-empty                   Convert "." to ""
    --force-dot, --avoid-empty                   Convert "" to "."
-   --no-merge-space-dot                         Take "." and "" as distinct from each other
+   --no-merge-[dot-empty|empty-dot]             Treat "." and "" as distinct
    --if-exists, --if-dir, --if-file, --always   Test path before adding it?
    --move, --move-if-rel, --move-if-abs         What if a path is already there
    --use-host-type                              Include architecture-specific suffices on paths
@@ -77,7 +77,7 @@ EOM
                                                 return 1
                                             }
                                             ;;
-                (--no-merge-@(dot-empty|empty-dot|dot-space|space-dot))
+                (--no-merge-@(dot-empty|empty-dot))
                                             dot=UNEQUAL ;;
                 (--suffix=*)                suffix=${arg#-*=} ;;
                 (--use-host?(-)type)        use_hosttype=true xparts=() ;;
@@ -102,13 +102,12 @@ EOM
                                             set -- "--$pi=${arg^^}" "$@"
                                             continue ;;
 
-                ( --*=@(allow|permit) )     set -- "${arg%%=*}=ALLOW" "$@" ; continue ;;
-                ( --*=@(force|do|need|always|require) )
+                ( --*=DO )                  set "${arg%%=*}" "$@" ; continue ;;
+                ( --*=PERMIT )              set -- "${arg%%=*}=ALLOW" "$@" ; continue ;;
+                ( --*=@(ALWAYS|NEED|REQUIRE) )
                                             set -- "${arg%%=*}=FORCE" "$@" ; continue ;;
-                ( --*=@(never|no|dont|not|prohibit) )
+                ( --*=@(DONT|NO|NOT|PROHIBIT) )
                                             set -- "${arg%%=*}=NEVER" "$@" ; continue ;;
-
-                ( --*=FORCE )               set "${arg%%=*}" "$@" ; continue ;;
 
                 (-[^-][^-]*)                set -- "${arg:0:2}" "-${arg:2}" "$@" ;;
 
