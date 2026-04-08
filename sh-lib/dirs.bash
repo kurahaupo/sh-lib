@@ -55,8 +55,8 @@ __np_p0() {
     d=${d#"$x"}
     p=${p#"$x"}
     printf %s%s "${c:-$__np_cc_reset}" "$x"
-    (( rc = ${#c} > 0 ))
-    (( cc -= ${#x}, cc < 0 && (cc = 0) ))
+    ! (( rc = ${#c} > 0 ))
+    ! (( cc -= ${#x}, cc < 0 && (cc = 0) ))
     return 0
 }
 
@@ -82,7 +82,7 @@ __np_p1() {
         printf '%s%s' "$__np_cc_relative" "$x"
         (( rc = 1 ))
     fi
-    (( cc -= ${#x}, cc < 0 && (cc = 0) ))
+    ! (( cc -= ${#x}, cc < 0 && (cc = 0) ))
     return 0
 }
 
@@ -245,8 +245,7 @@ _with_dirs() {
         (-v | --v?(e?(r?(b?(o?(s?(e)))))))  show_dirs=1 ;;
         (*) continue ;;
         esac
-        set -- "${@:1:i-1}" "${@:i+1}"
-        ((--i))
+        set -- "${@:1:--i}" "${@:i+2}"
     done
     "$@" > /dev/null
     status=$?
