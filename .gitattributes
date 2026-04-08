@@ -1,0 +1,24 @@
+# Windows DOS-text files
+*mingw* binary
+miscel/Makefile.mingw32 binary
+miscel/Makefile* binary
+
+*.dvi binary
+*.eot binary
+*.gif binary
+*.jpeg binary
+*.jpg binary
+*.odp binary
+*.otf binary
+*.pdf binary
+*.png binary
+*.pptx binary
+*.psd binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+
+# Data binary
+/test/less/errors/* binary
+img/* binary
+gmon.out binary

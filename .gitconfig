@@ -1,0 +1,298 @@
+# vim: set ts=8 sw=8 noet nowrap :
+
+# NOTE: some configuration is also in ~/.config/git/*
+
+[alias]
+	b	= branch -v
+	ba	= branch -av
+	baq	= branch -a
+	bq	= branch
+	bqa	= branch -a
+
+# I would like "co" for "checkout", but that's a prefix of "commit" (checkin)
+# so use "cho" instead.
+
+	cho	= checkout
+	chob	= checkout -b
+
+# Warn sternly about "git co" because it's a prefix of "git commit", while NOT
+# being an abbreviation for it.
+# Suggest "gco" because it's shorter than both "git ci" and "git commit".
+	co	= ! gitwarn --why=ambiguous     --suggest=checkout --trim=2 -- git co
+
+#	checkin	= ! gitwarn --why=deprecated    --suggest=commit   --trim=2 -- git checkin
+	checkin	= commit
+	ca	= commit --amend
+	cae	= commit --amend --edit
+	can	= commit --amend --no-edit
+	ci	= commit
+	cie	= commit --edit
+	cin	= commit --no-edit
+
+	catfile	= ! gitwarn --why=typo --keep=1 --suggest=cat-file --trim=2 -- git catfile
+#	cat	= cat-file
+	cf	= cat-file
+
+	che	= cherry-pick
+	cherrypick = cherry-pick
+#	cp	= cherry-pick
+
+	d	= diff
+	di	= diff
+	dn	= diff --name-only
+	dno	= diff --name-only
+
+	et	= rebase --edit-todo
+	ff	= pull --ff-only
+
+	h1	= log -n1                --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h2	= log -n2   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h3	= log -n3   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h4	= log -n4   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h5	= log -n5   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h6	= log -n6   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h7	= log -n7   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h8	= log -n8   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h9	= log -n9   --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h	= log -n10  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h10	= log -n10  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h20	= log -n20  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h30	= log -n30  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h40	= log -n40  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h50	= log -n50  --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h100	= log -n100 --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h150	= log -n150 --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	h200	= log -n200 --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	hh	= log       --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+	hist	= log       --topo-order --pretty=tformat:\"      \t%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\" --graph
+
+	l1	= log -n1                        --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l2	= log -n2   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l3	= log -n3   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l4	= log -n4   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l5	= log -n5   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l6	= log -n6   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l7	= log -n7   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l8	= log -n8   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l9	= log -n9   --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l	= log -n10  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l10	= log -n10  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l20	= log -n20  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l30	= log -n30  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l40	= log -n40  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l50	= log -n50  --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l100	= log -n100 --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l150	= log -n150 --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	l200	= log -n200 --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	ll	= log       --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+	list	= log       --topo-order         --pretty=tformat:\"%C(11)%h %C(13)%t %C(9)%ai %C(6)%aN%C(reset)   \t| %s%C(12)%d%C(reset)\"
+
+	n1	= log -n1                --oneline --name-only
+	n2	= log -n2   --topo-order --oneline --name-only
+	n3	= log -n3   --topo-order --oneline --name-only
+	n4	= log -n4   --topo-order --oneline --name-only
+	n5	= log -n5   --topo-order --oneline --name-only
+	n6	= log -n6   --topo-order --oneline --name-only
+	n7	= log -n7   --topo-order --oneline --name-only
+	n8	= log -n8   --topo-order --oneline --name-only
+	n9	= log -n9   --topo-order --oneline --name-only
+	n	= log -n10  --topo-order --oneline --name-only
+	n10	= log -n10  --topo-order --oneline --name-only
+	n20	= log -n20  --topo-order --oneline --name-only
+	n30	= log -n30  --topo-order --oneline --name-only
+	n40	= log -n40  --topo-order --oneline --name-only
+	n50	= log -n50  --topo-order --oneline --name-only
+	n100	= log -n100 --topo-order --oneline --name-only
+	n150	= log -n150 --topo-order --oneline --name-only
+	n200	= log -n200 --topo-order --oneline --name-only
+	nn	= log       --topo-order --oneline --name-only
+	names	= log       --topo-order --oneline --name-only
+
+	o1	= log -n1                --oneline
+	o2	= log -n2   --topo-order --oneline
+	o3	= log -n3   --topo-order --oneline
+	o4	= log -n4   --topo-order --oneline
+	o5	= log -n5   --topo-order --oneline
+	o6	= log -n6   --topo-order --oneline
+	o7	= log -n7   --topo-order --oneline
+	o8	= log -n8   --topo-order --oneline
+	o9	= log -n9   --topo-order --oneline
+	o	= log -n10  --topo-order --oneline
+	o10	= log -n10  --topo-order --oneline
+	o20	= log -n20  --topo-order --oneline
+	o30	= log -n30  --topo-order --oneline
+	o40	= log -n40  --topo-order --oneline
+	o50	= log -n50  --topo-order --oneline
+	o100	= log -n100 --topo-order --oneline
+	o150	= log -n150 --topo-order --oneline
+	o200	= log -n200 --topo-order --oneline
+	oo	= log       --topo-order --oneline
+	oneline	= log       --topo-order --oneline
+
+	pfwl	= push --force-with-lease
+	pushf	= push --force-with-lease
+
+	r1	= log -n1                --pretty=tformat:%h
+	r2	= log -n2   --topo-order --pretty=tformat:%h
+	r3	= log -n3   --topo-order --pretty=tformat:%h
+	r4	= log -n4   --topo-order --pretty=tformat:%h
+	r5	= log -n5   --topo-order --pretty=tformat:%h
+	r6	= log -n6   --topo-order --pretty=tformat:%h
+	r7	= log -n7   --topo-order --pretty=tformat:%h
+	r8	= log -n8   --topo-order --pretty=tformat:%h
+	r9	= log -n9   --topo-order --pretty=tformat:%h
+	r	= log -n10  --topo-order --pretty=tformat:%h
+	r10	= log -n10  --topo-order --pretty=tformat:%h
+	r20	= log -n20  --topo-order --pretty=tformat:%h
+	r30	= log -n30  --topo-order --pretty=tformat:%h
+	r40	= log -n40  --topo-order --pretty=tformat:%h
+	r50	= log -n50  --topo-order --pretty=tformat:%h
+	r100	= log -n100 --topo-order --pretty=tformat:%h
+	r150	= log -n150 --topo-order --pretty=tformat:%h
+	r200	= log -n200 --topo-order --pretty=tformat:%h
+	rr	= log       --topo-order --pretty=tformat:%h
+	revs	= log       --topo-order --pretty=tformat:%h
+	short-revs = log    --topo-order --pretty=tformat:%h
+
+	ri	= rebase -i
+
+	lr1	= log -n1                --pretty=tformat:%H
+	lr2	= log -n2   --topo-order --pretty=tformat:%H
+	lr3	= log -n3   --topo-order --pretty=tformat:%H
+	lr4	= log -n4   --topo-order --pretty=tformat:%H
+	lr5	= log -n5   --topo-order --pretty=tformat:%H
+	lr6	= log -n6   --topo-order --pretty=tformat:%H
+	lr7	= log -n7   --topo-order --pretty=tformat:%H
+	lr8	= log -n8   --topo-order --pretty=tformat:%H
+	lr9	= log -n9   --topo-order --pretty=tformat:%H
+	lr	= log -n10  --topo-order --pretty=tformat:%H
+	lr10	= log -n10  --topo-order --pretty=tformat:%H
+	lr20	= log -n20  --topo-order --pretty=tformat:%H
+	lr30	= log -n30  --topo-order --pretty=tformat:%H
+	lr40	= log -n40  --topo-order --pretty=tformat:%H
+	lr50	= log -n50  --topo-order --pretty=tformat:%H
+	lr100	= log -n100 --topo-order --pretty=tformat:%H
+	lr150	= log -n150 --topo-order --pretty=tformat:%H
+	lr200	= log -n200 --topo-order --pretty=tformat:%H
+	lrr	= log       --topo-order --pretty=tformat:%H
+	long-revs = log     --topo-order --pretty=tformat:%H
+
+	t1	= log -n1                --pretty=tformat:%t
+	t2	= log -n2   --topo-order --pretty=tformat:%t
+	t3	= log -n3   --topo-order --pretty=tformat:%t
+	t4	= log -n4   --topo-order --pretty=tformat:%t
+	t5	= log -n5   --topo-order --pretty=tformat:%t
+	t6	= log -n6   --topo-order --pretty=tformat:%t
+	t7	= log -n7   --topo-order --pretty=tformat:%t
+	t8	= log -n8   --topo-order --pretty=tformat:%t
+	t9	= log -n9   --topo-order --pretty=tformat:%t
+	t	= log -n10  --topo-order --pretty=tformat:%t
+	t10	= log -n10  --topo-order --pretty=tformat:%t
+	t20	= log -n20  --topo-order --pretty=tformat:%t
+	t30	= log -n30  --topo-order --pretty=tformat:%t
+	t40	= log -n40  --topo-order --pretty=tformat:%t
+	t50	= log -n50  --topo-order --pretty=tformat:%t
+	t100	= log -n100 --topo-order --pretty=tformat:%t
+	t150	= log -n150 --topo-order --pretty=tformat:%t
+	t200	= log -n200 --topo-order --pretty=tformat:%t
+	tt	= log       --topo-order --pretty=tformat:%t
+	trees	= log       --topo-order --pretty=tformat:%t
+	short-trees = log   --topo-order --pretty=tformat:%t
+
+	lt1	= log -n1                --pretty=tformat:%T
+	lt2	= log -n2   --topo-order --pretty=tformat:%T
+	lt3	= log -n3   --topo-order --pretty=tformat:%T
+	lt4	= log -n4   --topo-order --pretty=tformat:%T
+	lt5	= log -n5   --topo-order --pretty=tformat:%T
+	lt6	= log -n6   --topo-order --pretty=tformat:%T
+	lt7	= log -n7   --topo-order --pretty=tformat:%T
+	lt8	= log -n8   --topo-order --pretty=tformat:%T
+	lt9	= log -n9   --topo-order --pretty=tformat:%T
+	lt	= log -n10  --topo-order --pretty=tformat:%T
+	lt10	= log -n10  --topo-order --pretty=tformat:%T
+	lt20	= log -n20  --topo-order --pretty=tformat:%T
+	lt30	= log -n30  --topo-order --pretty=tformat:%T
+	lt40	= log -n40  --topo-order --pretty=tformat:%T
+	lt50	= log -n50  --topo-order --pretty=tformat:%T
+	lt100	= log -n100 --topo-order --pretty=tformat:%T
+	lt150	= log -n150 --topo-order --pretty=tformat:%T
+	lt200	= log -n200 --topo-order --pretty=tformat:%T
+	ltt	= log       --topo-order --pretty=tformat:%T
+	long-trees = log    --topo-order --pretty=tformat:%T
+
+	k	= stash save
+	keep	= stash save
+	save	= stash save
+
+	man	= help
+
+	s	= status
+	st	= status
+	stat	= status
+
+	t	= tag
+
+[log]
+	date = iso
+
+[merge]
+	defaultToUpstream = true
+
+[push]
+	default = matching
+
+[http]
+	cookiefile = /home/martin/.gitcookies
+
+[url "ssh://git@gist.github.com/"]
+	# In case I copied with (my) username included (only works for my own
+	# gists, but those are the only ones I can push anyway):
+	pushInsteadOf = https://gist.github.com/kurahaupo/
+	pushInsteadOf = http://gist.github.com/kurahaupo/
+	# For gists cloned with official no-username URL:
+	pushInsteadOf = https://gist.github.com/
+	pushInsteadOf = http://gist.github.com/
+
+# user identification -- one stanza per remote
+
+[user]
+	user	= martin
+	name	= Martin D Kealey
+	email	= martin@kurahaupo.gen.nz
+
+[github]
+	user	= kurahaupo
+	token	= 3f5f6925f490629675ae91b4313c1ed4
+	name	= Martin Kealey
+	email	= from-github@kurahaupo.gen.nz
+
+[user3]
+	name	= Martin Kealey
+	email	= from-github@kurahaupo.gen.nz
+
+[user2]
+	name	= Martin Kealey
+	user	= martink
+	email	= martin.kealey@smxemail.com
+
+[user4]
+	name	= Martin Kealey
+	email	= martink@catalyst.net.nz
+
+[locke]
+	user	= martink
+
+[gitprivate]
+	user	= martink
+
+[safe]
+	directory = /serve/hosts/quaker.org.nz/tui
+	directory = /serve/hosts/quaker.org.nz/tuitools
+	directory = /home/backup/ds920.kohi.sig.nz/volume2/sig/serve/exim
+	directory = /home/martin/git/coreutils/coreutils-9.1
+
+[patchid]
+	stable = true
+
+[remote]
+	pushDefault = mine
