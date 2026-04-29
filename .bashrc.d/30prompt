@@ -14,7 +14,21 @@ else
     PS_depth="{+$((SHLVL-1))}"
 fi
 
-PS1=$PS_depth'\t ${debian_chroot:+($debian_chroot) }\h:\u \!\$ '
+case $HOSTNAME in
+    erx*.sig.nz | ds*.sig.nz)
+                        PSHOSTUSER=${HOSTNAME#*.*.}
+                        PSHOSTUSER=${HOSTNAME%".$PSHOSTUSER"}
+                        PSHOSTUSER=${PSHOSTUSER/.kohi/.stonefields}
+                      # PSHOSTUSER=${PSHOSTUSER/./-}
+                        ;;
+    DS920)              PSHOSTUSER=ds920.stonefields ;;
+    DiskStation|DS218)  PSHOSTUSER=ds218.orakei ;;
+    *)                  unset PSHOSTUSER
+                        false
+esac &&
+    PSHOSTUSER+=:$USER
+
+PS1=$PS_depth'\t ${debian_chroot:+($debian_chroot) }${PSHOSTUSER:-\h:\u} \!\$ '
 
 colour_prompt=false
 
@@ -107,7 +121,7 @@ if
     esac
 then
     PS_status="$PS_open"
-    PS_status+='\h:\u'      # ${HOSTNAME%%.*}:${USER}
+    PS_status+='${PSHOSTUSER:-\h:\u}'
     PS_status+=' \w'        # ${PWD##*/}
     PS_status+=' [\l] \!'   # ${TTY##*/}
     PS_status+=' \D{%F,%T}' # $( date +%F,%T )
