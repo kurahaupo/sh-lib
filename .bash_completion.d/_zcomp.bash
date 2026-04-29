@@ -181,8 +181,6 @@ fi
 # TODO: add support for non-ANSI terminals, maybe, someday.
 #
 
-[[ "$( tput cup 9 6 ; tput clear )" = $'\e[10;7H\e['*'J' ]] || return   # doesn't seem to be an ANSI terminal
-
 case $TERM in
 (ansi*\
 |cons*\
@@ -235,7 +233,35 @@ then
 
     __zc_cReportCursor=$'\e[?6n'
 
-else
+elif
+    command -v tput 2> /dev/null &&
+    # Be careful not to break hard-tab indentation of heredoc
+    tput -S > /dev/null 2>&1 <<-\E
+	bold
+	clear
+	cub 1
+	cud 1
+	cuf 1
+	cup 9 6
+	cuu 1
+	dim
+	el
+	kcub1
+	kcud1
+	kcuf1
+	kcuu1
+	kend
+	khome
+	knp
+	kpp
+	rc
+	sc
+	setab 0
+	setaf 3
+	sgr0
+	u7
+	E
+then
 
     __zc_cKeyUp=$( tput kcuu1 )     # or '\e[A' or '\eOA'
     __zc_cKeyDn=$( tput kcud1 )     # or '\e[B' or '\eOB'
@@ -269,6 +295,10 @@ else
 
     __zc_cReportCursor=$( tput u7 ) # '\e[?6n'
 
+else
+    # TERM does not seem to indicate a regular ANSI terminal,
+    # AND we also lack a useful tput command.
+    return
 fi
 
 # no tput equivalents
