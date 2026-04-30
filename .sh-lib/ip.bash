@@ -31,12 +31,33 @@ ip() {
             # don't give warning if setting something
             [[ $w = @(set|add|del|delete|flush|help) ]] && warn_about_oneline=0
         done
-        if ((warn_about_oneline))
+        if ((warn_about_oneline)) && [[ -t 1 ]]
         then
-            if [[ -t 1 ]]
+            # have_gitwarn: negative for missing, positive for available, zero for unknown
+            if ((! have_gitwarn))
+            then
+                command -v gitwarn >/dev/null 2>&1
+                have_gitwarn=$(( $? ? -1 : 1 ))
+            fi
+
+            # have_gitwarn: negative for missing, positive for available, zero for unknown
+            if ((! have_ungetc))
+            then
+                command -v ungetc >/dev/null 2>&1 &&
+                ungetc $'\e[H'     # bound to beginning-of-line
+                have_ungetc=$(( $? ? -1 : 1 ))
+            fi
+
+            if ((have_gitwarn > 0)) && command -v gitwarn >/dev/null 2>&1
             then
                 # Not in a pipeline, stop and recommend replacement
-                gitwarn --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@";
+                if ((have_ungetc > 0))
+                then
+                    gitwarn --tty --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@"
+                else
+                    gitwarn --tty --fail --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@"
+                fi ||
+                    have_gitwarn=0 have_ungetc=0  # something went wrong, re-check next time
                 return 99
             else
                 # In pipeline, run anyway
