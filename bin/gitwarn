@@ -1,0 +1,274 @@
+#!/bin/bash
+
+shopt -s extglob
+{ { { {
+
+#
+# Interactive command repair-and-run
+#
+# First, replace zero or more "wrong" words, with zero or more "suggested"
+# words.
+# → The range of words to be replaced are indicated the semi-open range
+#   [KEEP_BEFORE,TRIM) from values given by the --keep-before and --trim options, both
+#   indexed from zero.
+# → The suggested replacements are given with the --suggest option, which
+#   has two possible forms:
+#       --suggest=WORD
+#       --suggest:NUM WORD-1 WORD-2 WORD-3 ... WORD-NUM
+#
+# Then we show possible replacements (one per suggestion)
+# Then we either:
+# → show a warning with the suggested replacement (this is "fail" mode); or
+# → inject the replacement into the tty input (so that pressing C<enter> will
+#   invoke the replacement command AND insert it into the shell history; this
+#   is "exec" mode); or
+# → invoke the modified command directly.
+#
+
+#export | grep -i git
+
+declare -ri false=0 true=1
+
+declare -i reedit_cmdline=false     # re-edit command line, rather than directly exec'ing replacement
+declare -i rerun=false
+declare -i show_only=false          # show list rather than re-edit or exec
+declare -i test_mode=false
+declare -i use_color=false
+
+exit_code=EXIT_FAIL
+default_why_not='has been replaced'
+why_not=
+
+case ${0##*/} in
+  (*warn*)  rerun=true ;;
+  (*fail*)  rerun=false ;;
+esac
+
+[[ ! -t 2 ]] ; use_color=$? reedit_cmdline=$?
+
+# keep_after is the number of the args to be removed before forming a
+# replacement. These are stashed in typo_args[], which is only used for showing
+# what's wrong.
+#
+# (Since the whole original command appears after the --, it's simply a matter
+# of slicing off keep_after elements from "$@".)
+#
+# args_before[] and args_after[] are the original args to be preserved.
+#
+
+keep_after=-1
+keep_before=keep_after-1
+
+declare -i flag_arg=true
+for ((;$#;)) do
+    opt=${1%%[:=]*}
+    arge=${1#"$opt"}
+    arg=${arge#*=}
+    case $1 in
+
+      # Valid options
+      (--fail)          (( rerun=!flag_arg )) ;;
+      (--rerun)         (( rerun=flag_arg )) ;;
+
+      (--reedit)        (( reedit_cmdline=flag_arg )) ;;
+      (--exec)          (( reedit_cmdline=!flag_arg )) ;;
+      (--tty|--color)   (( use_color=flag_arg )) ;;
+
+      (--test)          (( test_mode=flag_arg )) ;;
+
+      (--exit=*)        exit_code=${1#*=} ;;    # keep as a string for now, and sort out EX_whatever later
+
+      (--why=*)         if   [[ $arg = am* && ambiguous  = "$arg"* ]] ; then why_not='is ambiguous'
+                        elif [[ $arg = de* && deprecated = "$arg"* ]] ; then why_not='has been deprecated and should be replaced'
+                        elif [[ $arg = re* && replace    = "$arg"* ]] ; then why_not='has been removed and must be replaced'
+                        elif [[ $arg = ty* && typo       = "$arg"* ]] ; then why_not='looks like a typo'
+                        else why_not=$arg
+                        fi ;;
+
+      (--keep-before=*) keep_before=${1#*=} ;;
+      (--keep-after=* | --trim=*)  keep_after=${1#*=} ;;
+
+      (--suggest:*)     (( nrep=${arge#:} )) ; options+=( "${@:2:nrep}" ) ; ((nrep)) && shift $nrep ;;
+      (--suggest=*)     options+=( "$arg" ) ;;
+
+
+      # Generic arg-folding
+      (--exit\
+      |--keep\
+      |--suggest)       set X "$1=$2" "${@:3}" ;;
+
+      # Abbreviations (after arg-folding)
+      # Note that the trailing '?' on each match means these only affect abbreviations, not whole words
+      (--a*  )  [[ \--ambiguous   = "$1"*    ]] && { set --         --why=ambiguous  "${@:2}" ; continue ; } ;;&
+      (--c*  )  [[ \--color       = "$1"*?   ]] && { set --       --color            "${@:2}" ; continue ; } ;;&
+      (--d*  )  [[ \--deprecated  = "$1"*    ]] && { set --         --why=deprecated "${@:2}" ; continue ; } ;;&
+      (--e*  )  [[ \--exec        = "$1"*?   ]] && { set --        --exec            "${@:2}" ; continue ; } ;;&
+      (--e*=*)  [[ \--exit        = "$opt"*? ]] && { set --        --exit"$arge"     "${@:2}" ; continue ; } ;;&
+      (--f*  )  [[ \--fail        = "$1"*?   ]] && { set --        --fail            "${@:2}" ; continue ; } ;;&
+      (--k*=*)  [[ \--keep-before = "$opt"*? ]] && { set -- --keep-before"$arge"     "${@:2}" ; continue ; }
+                [[ \--keep-after  = "$opt"*? ]] && { set --  --keep-after"$arge"     "${@:2}" ; continue ; } ;;&
+      (--ree*)  [[ \--reedit      = "$1"*?   ]] && { set --      --reedit            "${@:2}" ; continue ; } ;;&
+      (--rep*)  [[ \--replaced    = "$1"*    ]] && { set --         --why=replace    "${@:2}" ; continue ; } ;;&
+      (--rer*)  [[ \--rerun       = "$1"*?   ]] && { set --       --rerun            "${@:2}" ; continue ; } ;;&
+      (--s*=*)  [[ \--suggest     = "$opt"*? ]] && { set --     --suggest"$arge"     "${@:2}" ; continue ; } ;;&
+      (--tr* )  [[ \--trim        = "$opt"*? ]] && { set --        --trim"$arge"     "${@:2}" ; continue ; } ;;&
+      (--te* )  [[ \--test        = "$1"*?   ]] && { set --        --test            "${@:2}" ; continue ; } ;;&
+      (--tt* )  [[ \--tty         = "$1"*    ]] && { set --       --color            "${@:2}" ; continue ; } ;;&
+      (--ty* )  [[ \--typo        = "$1"*    ]] && { set --         --why=typo       "${@:2}" ; continue ; } ;;&
+      (--w*=*)  [[ \--why         = "$opt"*? ]] && { set --         --why"$arge"     "${@:2}" ; continue ; } ;;&
+
+      # Generic negation
+      (--@(no|dont)-!(*=*))     (( flag_arg=!flag_arg )) ; set -- "--${1#--*-}" "${@:2}"      ; continue ;;
+#     (--@(without)-!(*=*))     (( flag_arg=!flag_arg )) ; set -- "--with-${1#--*-}" "${@:2}" ; continue ;;
+#     (--!(*=*|)=@(1|yes|on|enable))  (( flag_arg=true  )) ; set -- "$opt" "${@:2}"           ; continue ;;
+#     (--!(*=*|)=@(0|no|off|disable)) (( flag_arg=false )) ; set -- "$opt" "${@:2}"           ; continue ;;
+
+      (--)              shift ; break ;;
+      (--help)          cat <<-EndOfUsage ; exit 0 ;;
+${0##*/} [OPTIONS] -- ORIGINAL-CMD [ORIGINAL-ARGS]
+    --test
+    --replace {NAME} [ --with={REPLACEMENT} ... ] [--] [ORIGINAL-ARGS...]
+    --replace {NAME} --with:{NUM} {REPLACEMENT[1]} ... {REPLACEMENT[num]} [--] [ORIGINAL-ARGS...]
+    [--] {message} [original-args]
+    --help
+
+The purpose of this command is to warn when a command is run with invalid or
+obsolete options, or without required options, giving the chance to re-run
+the command either by directly executing it, or by inserting it into the
+input buffer.
+EndOfUsage
+      (-*)              printf "Bad option '%s'\n" "$1" ; exit 64 ;;
+      (*) break ;;
+    esac
+    flag_arg=true
+    shift
+done
+
+if ((keep_after<0))
+then
+    case $1 in
+      (ip)  keep_after=1 why_not='is missing the '\'-o\'' option' ;;
+      (git) keep_after=2 ;;
+      (*)   keep_after=1 ;;
+    esac
+fi
+
+typo_args=(        "${@:1:keep_after}"  )
+
+args_before=( "${@:1:keep_before}" )
+args_after=(  "${@:1+keep_after}" )
+((keep_after)) && shift $((keep_after))
+
+if ((use_color)) &&
+    IFS= read -r e < <( tput setaf 1 ) &&
+    [[ $e = $'\e['*m ]]
+then
+    # Colours & intensities
+    c_cERROR=$'\e[31;43;1m'
+    c_cWARN=$'\e[30;43m'
+
+    c_cALERT=$'\e[31;1m'
+    c_cSTRONG=$'\e[33;1m'
+    c_cPROP=$'\e[1;32m'
+    c_cQUOTE=$'\e[1m'
+
+    c_cNORM=$'\e[22;39;49m'     # Reset to normal
+else
+    c_cERROR=
+    c_cWARN=
+
+    c_cALERT=
+    c_cSTRONG=
+    c_cPROP=
+    c_cQUOTE=
+
+    c_cNORM=
+fi
+
+qq() {
+    # print a list of quoted args
+    local a
+    local argi=0
+    for a do
+        ((argi++)) && printf ' '
+        if   [[ $a != *[!-0-9a-zA-Z!%+=:,./@^_{}]* && -n $a ]]
+        then printf '%s' "$a"
+        elif [[ $a != *"'"* ]]
+        then printf "'%s'" "$a"
+        elif [[ $a != *[\\\$\"\`]* ]]
+        then printf "'%s'" "$a"
+        else printf '%q' "$a" # contains single quotes AND either double quotes or ` or $
+        fi
+    done
+}
+
+if (( test_mode ))
+then
+    printf 'ARGS (%u):\n' $#
+    printf '\t%q\n' "$@"
+    printf 'ENV:\n'
+    declare -px
+    exit 0
+fi
+
+nrep=${#options[@]}
+
+if (( ${#typo_args[@]} ))
+then
+    if (( rerun ))
+    then printf '%sWARNING:%s ' "$c_cWARN"  "$c_cNORM"
+    else printf '%sERROR:%s '   "$c_cERROR" "$c_cNORM"
+    fi >&2
+
+    printf '%s%s%s %s%s%s\n' "$c_cSTRONG" "${typo_args[*]}" "$c_cNORM" "$c_cALERT" "${why_not:-$default_why_not}" "$c_cNORM"
+fi >&2
+
+if (( rerun && nrep == 1 ))
+then
+
+    # Allow word-splitting on ${options[0]}
+    args=( "${args_before[@]}" ${options[0]} "$@" )
+    qargs="$( qq "${args[@]}" )"
+    if (( reedit_cmdline ))
+    then
+        printf 'Use this instead:\n'
+        ungetc "$qargs" ||
+        printf >&2 'PROPOSE: %s%s%s\n' "$c_cPROP" "$qargs" "$c_cNORM"
+        exit 1
+    else
+        printf >&2 'RUNNING: %s%s%s\n' "$c_cPROP" "$qargs" "$c_cNORM"
+        exec "${args[@]}" 9>&-
+    fi
+
+fi
+
+if ((nrep > 0)) ; then
+    if ((nrep == 1))
+    then printf 'Use this instead:\n'
+    else printf 'Use one of these instead:\n'
+    fi
+    for ((i=0;i<nrep;++i)) do
+        # Allow word-splitting on ${options[i]}
+        args=( "${args_before[@]}" ${options[i]} "$@" )
+        printf ' %s' "$c_cQUOTE"
+        qq "${args[@]}"
+        printf '%s\n' "$c_cNORM"
+    done
+fi >&2
+
+#printf '%s\n' "$*"
+
+exit_code=${exit_code^^}
+exit_code=${exit_code#EX*_}  # ignore optional EX_ or EXIT_ prefix
+
+# short'n'sweet
+PASS=0 FAIL=1
+# stdlib.h (ISO-9899)
+SUCCESS=0 FAILURE=1
+# sysexits.h (BSD)
+OK=0
+USAGE=64 DATAERR=65 NOINPUT=66 NOUSER=67 NOHOST=68 UNAVAILABLE=69 SOFTWARE=70
+OSERR=71 OSFILE=72 CANTCREAT=73 IOERR=74 TEMPFAIL=75 PROTOCOL=76 NOPERM=77
+CONFIG=78
+
+exit $((exit_code)) ; } } } }
