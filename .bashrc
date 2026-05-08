@@ -172,6 +172,7 @@ _F=(
     ~/.bash_completion
 )
 
+__REQUIRE_FAILURE_VERBOSE__=false   # don't complain about duplicates in .sh-lib
 declare _f
 for _f in "${_F[@]}"
 do
@@ -179,4 +180,4 @@ do
     [[ -n $_f && -f $_f ]] && . "$_f"
 done
 
-unset _F
+unset _F __REQUIRE_FAILURE_VERBOSE__
