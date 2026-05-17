@@ -1,7 +1,7 @@
 # Want "ip --oneline" by default -- but with a warning, so that we don't forget when scripting
 
 ip() {
-    local i warn_about_oneline=1 w
+    local i warn_about_oneline=1 w _fail
     for (( i=1 ; i<=$# ; i++ )) do
         w=${!i}
         case $w in
@@ -52,11 +52,10 @@ ip() {
             then
                 # Not in a pipeline, stop and recommend replacement
                 if ((have_ungetc > 0))
-                then
-                    gitwarn --tty --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@"
-                else
-                    gitwarn --tty --fail --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@"
-                fi ||
+                then _fail=()
+                else _fail=( --fail )
+                fi
+                gitwarn --tty "${_fail[@]}" --suggest='ip -o ' --why="You forgot the '-o' flag" -- ip "$@" ||
                     have_gitwarn=0 have_ungetc=0  # something went wrong, re-check next time
                 return 99
             else
