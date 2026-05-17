@@ -8,7 +8,10 @@ set -o noclobber -o physical
 # checkwinsize: check the window size after each command and, if necessary, update the values of LINES and COLUMNS.
 (( 10#${BASH_VERSION%%.*} >= 2 )) && shopt -s checkwinsize
 
-if (( BASH_VERSINFO[0] >= 4 )) && [[ ${BASH_VERSINFO[*]} != '4 1 0 2 release mipsel-unknown-linux-gnu' ]] ; then
-    # bash v4 doesn't have checkjobs on by default
+if  (( BASH_VERSINFO[0] == 4 )) && [[ $- = *m* ]]
+then
+    # Bash v4 doesn't have checkjobs on by default, so turn it on, unless we're
+    # running entirely without job control; EdgeOS in particular has /bin/vbash
+    # compiled with job control disabled.
     shopt -s checkjobs
 fi
