@@ -53,5 +53,5 @@ if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
     rm -f "$hist_tmp"
 
     # Make sure we save the history as we go...
-    PROMPT_COMMAND+=$'\nhistory -a'
+    PROMPT_COMMAND+=$'\n history -a'
 fi
