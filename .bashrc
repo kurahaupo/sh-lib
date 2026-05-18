@@ -101,7 +101,7 @@ done
 declare -A BASH_FUNCTION_ALIASES
 declare -A BASH_REMAPPED_ALIASES
 BASH_REMAPPED_ALIASES[set]=vset
-BASH_REMAPPED_REASON[set]='use ‘\e[33m%s\e[39m’ where the VyOS documentation says to use ‘\e[33m%s\e[39m’\n'
+BASH_REMAPPED_REASON=
 alias() {
     local _a _b _m _n _p=0 _t=0 _v=0
     for _a do
@@ -114,7 +114,7 @@ alias() {
                 _n=${_a%%=*} _b=${_a#*=}
                 _m=${BASH_REMAPPED_ALIASES[$_n]:-$_n}
                 [[ $_n != $_m && -t 2 ]] &&
-                    printf >&2 "\e[1;41mNOTICE\e[49m: ${BASH_REMAPPED_REASON[$_n]:-'use ‘\e[33m%s\e[39m’ instead of ‘\e[33m%s\e[39m’ alias'}\e[49;22m\n" "$_m" "$_n"
+                    printf >&2 "\e[1;41mNOTICE\e[49m: use ‘\e[33m%s\e[39m’ ${BASH_REMAPPED_REASON:-instead of} ‘\e[33m%s\e[39m’\e[49;22m\n" "$_m" "$_n"
                 unalias "$_n" 2> /dev/null
                 eval "
                   $_m () {
@@ -176,4 +176,5 @@ unset _f
 bind '"?":self-insert' # vyatta key binding
 bind '"C-_":possible-completions' # vyatta key binding
 BASH_REMAPPED_ALIASES[rename]=vrename
+BASH_REMAPPED_REASON='wherever the VyOS/EdgeOS documentation says to use'
 }
