@@ -149,32 +149,25 @@ alias() {
 
 ################################################################################
 # Read other files, including:
-#  * aliases
-#  * tab-completion
 #  * utility functions
-
-declare -a _F=(
-                "$BASH_ENV"
-                ~/.bashrc.d/*
-                ~/.sh-lib/*.bash
-              )
-
-# Unfortunately, sometimes the inclusion of /etc/bash_completion within
-# /etc/bash.bashrc is commented out; fix that here.
-${BASH_COMPLETION:+:} false || _F=( "${_F[@]}" /etc/bash_completion )
-
-_F=(
-    "${_F[@]}"
-    ~/.bash_aliases
-    ~/.bash_completion
-)
+#  * tab-completion
+#  * aliases
 
 __REQUIRE_FAILURE_VERBOSE__=false   # don't complain about duplicates in .sh-lib
-declare _f
-for _f in "${_F[@]}"
+for _f in   ~/.sh-lib/*.bash \
+            ~/.bashrc.d/* \
+            ~/.bash_aliases \
+            ~/.bash_completion \
+            ${BASH_ENV:+"$BASH_ENV"}
 do
     (( BASHRC_DEBUG )) && printf '%(%F %T)T bashrc: reading %s\n' -1 "$_f"
     [[ -n $_f && -f $_f ]] && . "$_f"
 done
 
-unset _F __REQUIRE_FAILURE_VERBOSE__
+# Unfortunately, sometimes the inclusion of /etc/bash_completion within
+# /etc/bash.bashrc is commented out; fix that here.
+
+[[ -n $BASH_COMPLETION || ! -f /etc/bash_completion ]] ||
+    . /etc/bash_completion
+
+unset _f __REQUIRE_FAILURE_VERBOSE__
