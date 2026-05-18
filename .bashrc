@@ -175,4 +175,5 @@ unset _f
 [[ $( uname -r ) = *-UBNT ]] && {
 bind '"?":self-insert' # vyatta key binding
 bind '"C-_":possible-completions' # vyatta key binding
+BASH_REMAPPED_ALIASES[rename]=vrename
 }
