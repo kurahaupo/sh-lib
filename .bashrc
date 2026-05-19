@@ -95,6 +95,12 @@ do
 done
 
 ################################################################################
+# In case VyOS has already mangled the environment...
+
+unalias set  2> /dev/null
+unset -f set 2> /dev/null
+
+################################################################################
 # Read other files, including:
 #  * utility functions
 #  * tab-completion
