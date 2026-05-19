@@ -95,16 +95,6 @@ do
 done
 
 ################################################################################
-# To override VyOS/EdgeOS key bindings, they must be in ~/.bashrc, unindented,
-# with a comment ‘# vyatta key binding’, so that _vyatta_op_do_key_bindings
-# will find and use them.
-
-[[ $( uname -r ) = *-UBNT ]] && {
-bind '"?":self-insert' # vyatta key binding
-bind '"C-_":possible-completions' # vyatta key binding
-}
-
-################################################################################
 # Redefine "alias" so that it creates functions instead; also divert attempts
 # by VyOS/EdgeOS to override standard commands.
 
@@ -178,3 +168,11 @@ unset _f
     . /etc/bash_completion
 
 ################################################################################
+# To override VyOS/EdgeOS key bindings, they must be in ~/.bashrc, unindented,
+# with a comment ‘# vyatta key binding’, so that _vyatta_op_do_key_bindings
+# will find and use them.
+
+[[ $( uname -r ) = *-UBNT ]] && {
+bind '"?":self-insert' # vyatta key binding
+bind '"C-_":possible-completions' # vyatta key binding
+}
