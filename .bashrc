@@ -95,6 +95,12 @@ do
 done
 
 ################################################################################
+# Would be nice if all of uname's components were provided, not just
+#   HOSTTYPE (same as uname -m)
+#   HOSTNAME (same as uname -n)
+_=${HOSTKREL=$( uname -r )}
+
+################################################################################
 # In case VyOS has already mangled the environment...
 
 unalias set  2> /dev/null
@@ -111,6 +117,12 @@ __REQUIRE_FAILURE_VERBOSE__=false \
 
 __REQUIRE_FAILURE_VERBOSE__=false \
 . ~/.sh-lib/alias.bash
+
+[[ $HOSTKREL = *-UBNT ]] && {
+    _alias_set_remap_reason 'wherever the VyOS/EdgeOS documentation says to use'
+    _alias_add_remap set vset
+    _alias_add_remap rename vrename
+}
 
 for _f in   ~/.bashrc.d/* \
             ~/.bash_aliases \
@@ -138,10 +150,7 @@ unset _f
 # with a comment ‘# vyatta key binding’, so that _vyatta_op_do_key_bindings
 # will find and use them.
 
-[[ $( uname -r ) = *-UBNT ]] && {
+[[ $HOSTKREL = *-UBNT ]] && {
 bind '"?":self-insert' # vyatta key binding
 bind '"C-_":possible-completions' # vyatta key binding
-_alias_add_remap rename vrename
-_alias_add_remap set vset
-_alias_set_remap_reason 'wherever the VyOS/EdgeOS documentation says to use'
 }
