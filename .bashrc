@@ -153,9 +153,10 @@ alias() {
 #  * tab-completion
 #  * aliases
 
-__REQUIRE_FAILURE_VERBOSE__=false   # don't complain about duplicates in .sh-lib
-for _f in   ~/.sh-lib/*.bash \
-            ~/.bashrc.d/* \
+__REQUIRE_FAILURE_VERBOSE__=false \
+. ~/.sh-lib/autoload.bash --all
+
+for _f in   ~/.bashrc.d/* \
             ~/.bash_aliases \
             ~/.bash_completion \
             ${BASH_ENV:+"$BASH_ENV"}
@@ -163,11 +164,17 @@ do
     (( BASHRC_DEBUG )) && printf '%(%F %T)T bashrc: reading %s\n' -1 "$_f"
     [[ -n $_f && -f $_f ]] && . "$_f"
 done
+unset _f
 
-# Unfortunately, sometimes the inclusion of /etc/bash_completion within
-# /etc/bash.bashrc is commented out; fix that here.
+################################################################################
 
-[[ -n $BASH_COMPLETION || ! -f /etc/bash_completion ]] ||
+# In Debian /etc/bash_completion is sourced from /etc/bash.bashrc, but
+# sometimes it's commented out or removed by other distributors.
+# If so, source it here, but not more than once.
+
+[[ -n $BASH_COMPLETION ||
+   -n $BASH_COMPLETION_VERSINFO ||
+ ! -f /etc/bash_completion ]] ||
     . /etc/bash_completion
 
-unset _f __REQUIRE_FAILURE_VERBOSE__
+################################################################################

@@ -217,5 +217,5 @@ if [[ -n "$*" ]] && ! (
     (( BASH_ARGC[0] == 0 && ${#BASH_ARGC[@]} > 0 )) # in case this gets fixed sometime
    )
 then
-    autoload -- "$@"
+    autoload "$@"
 fi
