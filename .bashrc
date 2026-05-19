@@ -95,49 +95,6 @@ do
 done
 
 ################################################################################
-# Redefine "alias" so that it creates functions instead; also divert attempts
-# by VyOS/EdgeOS to override standard commands.
-
-declare -A BASH_FUNCTION_ALIASES
-declare -A BASH_REMAPPED_ALIASES
-BASH_REMAPPED_ALIASES[set]=vset
-BASH_REMAPPED_REASON=
-alias() {
-    local _a _b _m _n _p=0 _t=0 _v=0
-    for _a do
-        case $_a in
-          -p)   _p=1 ;;
-          -t)   _t=1 ;;
-          -v)   _v=1 ;;
-          -x)   ;;
-          *=*)  _p=0
-                _n=${_a%%=*} _b=${_a#*=}
-                _m=${BASH_REMAPPED_ALIASES[$_n]:-$_n}
-                [[ $_n != $_m && -t 2 ]] &&
-                    printf >&2 "\e[1;41mNOTICE\e[49m: use ‘\e[33m%s\e[39m’ ${BASH_REMAPPED_REASON:-instead of} ‘\e[33m%s\e[39m’\e[49;22m\n" "$_m" "$_n"
-                unalias "$_n" 2> /dev/null
-                eval "
-                  $_m () {
-                    : '$_n ${_m#$_n} aliased at $( caller )' ;
-                    $_b \"\$@\";
-                  }"
-                BASH_FUNCTION_ALIASES[$_n]=$_m
-                ;;
-          *)    _p=0
-                ((!_t)) && type "$_a"
-                ;;
-        esac
-    done
-    if ((!_t && (_p || $#==0))) ; then
-        printf 'Real aliases:\n'
-        #builtin alias -p
-        printf '\t%s\n' "${!BASH_ALIASES[@]}"
-        printf 'Functions defined using the "alias" command:\n'
-        printf '\t%s\n' "${!BASH_FUNCTION_ALIASES[@]}"
-    fi
-}
-
-################################################################################
 # Read other files, including:
 #  * utility functions
 #  * tab-completion
@@ -175,6 +132,7 @@ unset _f
 [[ $( uname -r ) = *-UBNT ]] && {
 bind '"?":self-insert' # vyatta key binding
 bind '"C-_":possible-completions' # vyatta key binding
-BASH_REMAPPED_ALIASES[rename]=vrename
-BASH_REMAPPED_REASON='wherever the VyOS/EdgeOS documentation says to use'
+_alias_add_remap rename vrename
+_alias_add_remap set vset
+_alias_set_remap_reason 'wherever the VyOS/EdgeOS documentation says to use'
 }
