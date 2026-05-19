@@ -109,6 +109,9 @@ unset -f set 2> /dev/null
 __REQUIRE_FAILURE_VERBOSE__=false \
 . ~/.sh-lib/autoload.bash --all
 
+__REQUIRE_FAILURE_VERBOSE__=false \
+. ~/.sh-lib/alias.bash
+
 for _f in   ~/.bashrc.d/* \
             ~/.bash_aliases \
             ~/.bash_completion \

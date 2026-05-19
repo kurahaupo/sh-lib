@@ -33,11 +33,16 @@ alias() {
         esac
     done
     if ((!_t && (_p || $#==0))) ; then
+        # VyOS vbash crashes on “${#BASH_ALIASES[@]}” but only when it's a
+        # magic variable. (That's why there's no guard below.)
+        #
+        # $ vbash --version
+        # GNU bash, version 4.1.0(2)-release (mips-unknown-linux-gnu)
+
         printf 'Real aliases:\n'
-        #builtin alias -p
-        printf '\t%s\n' "${!BASH_ALIASES[@]}"
-        printf 'Functions defined using the "alias" command:\n'
-        printf '\t%s\n' "${!BASH_FUNCTION_ALIASES[@]}"
+        builtin alias -p
+        printf 'Pseudo aliases (actually functions):\n'
+        printf 'declare -f %-12s \e[2m# (alias)\e[22m\n' "${!BASH_FUNCTION_ALIASES[@]}"
     fi
 }
 _provides alias
