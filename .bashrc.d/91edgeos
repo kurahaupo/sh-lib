@@ -1,0 +1,32 @@
+
+case ${HOSTKREL-$( uname -r )} in
+  *UBNT)
+
+    sd()  { cli-shell-api showCfg | grep '^[-+>]'; }
+    show()  { cli-shell-api showConfig "$@"; }
+    showcurr() { cli-shell-api showConfig --show-active-only "$@"; }
+    showdiff() { cli-shell-api showConfig --show-commands "$@"; }
+    vv()  { printf '\e[2m%s\e[m\n' "$*" >&2 ; "$@" ; }
+
+    ii() {
+      local what=$1 type=$2
+      cli-shell-api -- showCfg interfaces "$type" |
+      grep "^ $type" |
+      cut -d' ' -f3 |
+      while read int
+      do
+        vv "$what" interfaces "$type" "$int" "${@:3}" 
+        echo 
+      done
+    }   
+
+    ie()  { ii "$1" ethernet  "${@:2}" ; }
+    is()  { ii "$1" switch    "${@:2}" ; }
+    iw()  { ii "$1" wireguard "${@:2}" ; }
+
+    ve()  { ii show ethernet  "$@" ; }
+    vs()  { ii show switch    "$@" ; }
+    vw()  { ii show wireguard "$@" ; }
+
+    ;;
+esac
