@@ -14,23 +14,8 @@ else
     PS_depth="{+$((SHLVL-1))}"
 fi
 
-case $HOSTNAME in
-    erx*.sig.nz | ds*.sig.nz)
-                        PSHOSTUSER=${HOSTNAME#*.*.}
-                        PSHOSTUSER=${HOSTNAME%".$PSHOSTUSER"}
-                        PSHOSTUSER=${PSHOSTUSER/.kohi/.stonefields}
-                      # PSHOSTUSER=${PSHOSTUSER/./-}
-                        ;;
-    DS920)              PSHOSTUSER=ds920.stonefields ;;
-    DiskStation|DS218)  PSHOSTUSER=ds218.orakei ;;
-    *)                  unset PSHOSTUSER
-                        false
-esac &&
-    PSHOSTUSER+=:$USER
-
-PS1=$PS_depth'\t ${debian_chroot:+($debian_chroot) }${PSHOSTUSER:-\h:\u} \!\$ '
-
 colour_prompt=false
+colour_mono=false
 
 # Does the terminal support colour?
 case $TERM in
@@ -51,10 +36,25 @@ case $TERM in
     ;;
 esac
 
+case $HOSTNAME in
+    treehug | treehug.*.@(au|nz) )
+                        colour_mono=true ;;
+    erx*.sig.nz | ds*.sig.nz )
+                        PSHOSTUSER=${HOSTNAME#*.*.}
+                        PSHOSTUSER=${HOSTNAME%".$PSHOSTUSER"}
+                        PSHOSTUSER=${PSHOSTUSER/.kohi.sig/.stonefields.sig}
+                      # PSHOSTUSER=${PSHOSTUSER/./-}
+                        ;;
+    DS920 )             PSHOSTUSER=ds920.stonefields ;;
+    DiskStation|DS218 ) PSHOSTUSER=ds218.orakei ;;
+    *)                  unset PSHOSTUSER
+                        false
+esac &&
+    PSHOSTUSER+=:$USER
+
+PSHILITE=
 if ((colour_prompt))
 then
-  # PS1='\t ${debian_chroot:+($debian_chroot) }\h:\u \!\$ '
-    PS1='\[\e[${PSHILITE:-7}m\]\t ${debian_chroot:+\[\e[2m\]($debian_chroot)\[\e[22m\] }\!\[\e[0m\]\$ '
     # Use a simple hash of $HOSTNAME to pick a colour from the 6×6×6 colour
     # cube. Normally use it directly as the background colour with white as the
     # foreground colour; but if it's "too dark" use its complement as the
@@ -68,40 +68,35 @@ then
     # or identical colours may be desirable, in which case set P2 = 1.
     #
     # (P1 & P2 both need to be mutually prime with 30, and P1 should be at
-    # least (6×6×6)² to give an unbiased spread.)
+    # least (6×6×6)²=6⁶=46656 to give an unbiased spread.)
+
+    (( colour_mono )) ||
     PSHILITE=$( h=${HOSTNAME%%.*}$debian_chroot h=${h,,}
+                h=37#${h//[^0-9a-z]/A}      # 37 symbols: 0..9, a..f, A
                 P1=46663 P2=223 P3=30
                 qr=${BASHRC_prompt_colours_red:-6} qg=${BASHRC_prompt_colours_green:-6} qb=${BASHRC_prompt_colours_blue:-6}
                 for cx in qr qg qb ; do (( cx < 1 || ($cx = 1), cx > 6 || ($cx = 6) )) ; done
-
-                ((
-                    m = qr*qg*qb,
-                    n1 = 37#${h//[^0-9a-z]/A},
-                    n1 &= 0x7fffffff,
-                    n1 %= P1,
-                    n1 *= P2,
-                    n1 += P3,
-                    n2 = n1 % m
-                ))
-
-                ((
-                    r=5-n2/qb/qg%qr, g=5-n2/qb%qg, b=5-n2%qb,
+                ((  h &= 0x7fffffff, h %= P1, h *= P2, h += P3,
+                    h %= m = qr*qg*qb,
+                    r = 5-h/qb/qg%qr, g = 5-h/qb%qg, b = 5-h%qb,
                     bg = 16+r*36+g*6+b,
                     fg = 0,
-                    r+g+b/2 < 5 && ( fg = 247-bg, bg = 237 )
-                ))
-
+                    r+g+b/2 < 5 && ( fg = bg, bg = 237 ) ))
                 (( fg < 8 )) || fg="8;5;$fg"
                 (( bg < 8 )) || bg="8;5;$bg"
                 cc="7;4$fg;3$bg"
-                echo "$cc"
-
+                printf %s "$cc"
                 [[ $BASHRC_DEBUG ]] &&
                     printf >&2 \
-                        'Prompting: \e[%smhostname\e[39;49m=%-20s hash=%-8u (%%%u=)%-3u rgb=(%s) colour-code=%s\n' \
-                        "$cc" "$h" "$n2" "$m" "$n2" "$r,$g,$b" "$cc"
+                        'Prompting: \e[%smhostname\e[27;39;49m=%-20s hash=%-8u (%%%u=)%-3u rgb=(%s) colour-code=%s\n' \
+                        "$cc" "$h" "$h" "$m" "$h" "$r,$g,$b" "$cc"
               )
+
+    PS1=$PS_depth'\[\e[${PSHILITE:-7}m\]\t ${debian_chroot:+\[\e[2m\](\[\e[5m\]*\[\e[25m\]$debian_chroot)\[\e[22m\] }\!\[\e[0m\]\$ '
+else
+    PS1=$PS_depth'\t ${debian_chroot:+(*$debian_chroot) }${PSHOSTUSER:-\h:\u} \!\$ '
 fi
+unset PS_depth
 
 # When building & testing new versions of Bash, put the version in the prompt
 case $BASH in
@@ -113,10 +108,10 @@ if
     case $TERM in
       *[kx]term* | *[rx]vt* | *putty* | *PuTTY* )
             # Window title bar
-            PS_open='\033]2;' PS_close='\007'   ;;
+            PS_open='\e]2;' PS_close='\a'   ;;
       screen* | tmux* )
             # Status line
-            PS_open='\033k'   PS_close='\033\\' ;;
+            PS_open='\ek'   PS_close='\e\\' ;;
       *)    false ;;
     esac
 then
@@ -126,13 +121,12 @@ then
     PS_status+=' [\l] \!'   # ${TTY##*/}
     PS_status+=' \D{%F,%T}' # $( date +%F,%T )
     PS_status+='${WINDOWNAME:+ [$WINDOWNAME]}'
-    PS_status+='${debian_chroot:+ (${debian_chroot//'\'$'\e['\''*m})}'
+    PS_status+='${debian_chroot:+ ($debian_chroot)}'
     PS_status+='${SSH_CLIENT:+ from ${SSH_CLIENT%%\ *}}'
     PS_status+="$PS_close"
-    PS1=$PS_depth"\[$PS_status\]$PS1"
+    PS1="\[$PS_status\]$PS1"
     unset PS_open PS_status PS_close
 
     # Allow EOF to close just a window, rather than whole login session
     unset ignoreeof
 fi
-unset PS_depth
