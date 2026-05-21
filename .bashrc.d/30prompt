@@ -126,7 +126,7 @@ then
     PS_status+=' [\l] \!'   # ${TTY##*/}
     PS_status+=' \D{%F,%T}' # $( date +%F,%T )
     PS_status+='${WINDOWNAME:+ [$WINDOWNAME]}'
-    PS_status+='${debian_chroot:+ ($debian_chroot)}'
+    PS_status+='${debian_chroot:+ (${debian_chroot//'\'$'\e['\''*m})}'
     PS_status+='${SSH_CLIENT:+ from ${SSH_CLIENT%%\ *}}'
     PS_status+="$PS_close"
     PS1=$PS_depth"\[$PS_status\]$PS1"
