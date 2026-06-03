@@ -89,11 +89,31 @@ then
                         "$cc" "$h" "$h" "$m" "$h" "$r,$g,$b" "$cc"
               )
 
-    PS1=$PS_depth'\[\e[${PSHILITE:-7}m\]\t ${debian_chroot:+\[\e[2m\](\[\e[5m\]*\[\e[25m\]$debian_chroot)\[\e[22m\] }\!\[\e[0m\]\$ '
+    PS_sprompt='\[\e[${PSHILITE:-7}m\]'
+    PS_eprompt='\[\e[0m\]'
+    PS_sdim='\[\e[2m\]'
+    PS_edim='\[\e[22m\]'
+    PS_sblink='\[\e[5m\]'
+    PS_eblink='\[\e[25m\]'
 else
-    PS1=$PS_depth'\t ${debian_chroot:+(*$debian_chroot) }${PSHOSTUSER:-\h:\u} \!\$ '
+    PS_sprompt=
+    PS_eprompt=
+    PS_sdim=
+    PS_edim=
+    PS_sblink=
+    PS_eblink=
 fi
-unset PS_depth
+
+PS1=$PS_sprompt$PS_depth
+PS1+='\t '
+PS1+='${debian_chroot:+'$PS_sdim'('$PS_sblink'@'$PS_eblink'$debian_chroot)'$PS_edim' }'
+PS1+='${VYATTA_EDIT_LEVEL:+'$PS_sdim'('$PS_sblink'*'$PS_eblink'EDIT $VYATTA_EDIT_LEVEL)'$PS_edim' }'
+PS1+='${PSHOSTUSER:-\h:\u} '
+PS1+='\!'
+PS1+=$PS_eprompt
+PS1+='\$ '
+
+unset PS_depth PS_eblink PS_ecolour PS_edim PS_sblink PS_scolour PS_sdim
 
 # When building & testing new versions of Bash, put the version in the prompt
 case $BASH in
