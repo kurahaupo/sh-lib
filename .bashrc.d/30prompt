@@ -36,21 +36,18 @@ case $TERM in
     ;;
 esac
 
+PSHOSTUSER=
 case $HOSTNAME in
     treehug | treehug.*.@(au|nz) )
                         colour_mono=true ;;
     erx*.sig.nz | ds*.sig.nz )
-                        PSHOSTUSER=${HOSTNAME#*.*.}
-                        PSHOSTUSER=${HOSTNAME%".$PSHOSTUSER"}
+                        PSHOSTUSER=${HOSTNAME%".${HOSTNAME#*.*.}"}
                         PSHOSTUSER=${PSHOSTUSER/.kohi.sig/.stonefields.sig}
-                      # PSHOSTUSER=${PSHOSTUSER/./-}
                         ;;
     DS920 )             PSHOSTUSER=ds920.stonefields ;;
     DiskStation|DS218 ) PSHOSTUSER=ds218.orakei ;;
-    *)                  unset PSHOSTUSER
-                        false
-esac &&
-    PSHOSTUSER+=:$USER
+esac
+PSHOSTUSER+=${PSHOSTUSER:+:$USER}
 
 PSHILITE=
 if ((colour_prompt))
