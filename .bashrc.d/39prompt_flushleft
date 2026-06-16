@@ -5,14 +5,14 @@ case 4 in
  1)
     prompt_flushleft() { :;}
     shopt -s checkwinsize       # sets COLUMNS
-    printf -v _MissingEOL '%-*.*s' $COLUMNS $COLUMNS '<<< missing EOL'
+    printf -v _MissingEOL '%-*.*ls' $COLUMNS $COLUMNS '◀◁< missing EOL'
     PS1='\[\e[1;7;31m$_MissingEOL\r\e[m\e[2K\]'"$PS1"
     ;;
 
  2)
     prompt_flushleft() {
         shopt -s checkwinsize   # sets COLUMNS
-        printf -v _MissingEOL '%-*.*s' $COLUMNS $COLUMNS '<<< missing EOL'
+        printf -v _MissingEOL '%-*.*ls' $COLUMNS $COLUMNS '◀◁< missing EOL'
     }
     [[ $PROMPT_COMMAND = *prompt_flushleft* ]] ||
      PROMPT_COMMAND+=$'\n prompt_flushleft\n'
@@ -20,10 +20,10 @@ case 4 in
     ;;
 
  *)
-    _MissingEOL='<<< missing EOL'
+    _MissingEOL='◀◁< missing EOL'
     prompt_flushleft() {
         shopt -s checkwinsize   # sets COLUMNS
-        printf '\e[1;7;31m%-*.*s\r\e[m\e[2K' $COLUMNS $COLUMNS "$_MissingEOL"
+        printf '\e[1;7;31m%-*.*ls\r\e[m\e[2K' $COLUMNS $COLUMNS "$_MissingEOL"
     }
     [[ $PROMPT_COMMAND = *prompt_flushleft* ]] ||
      PROMPT_COMMAND+=$'\n prompt_flushleft\n'
