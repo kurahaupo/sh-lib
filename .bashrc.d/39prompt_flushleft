@@ -19,6 +19,13 @@ case 4 in
     PS1='\[\e[1;7;31m$_MissingEOL\r\e[m\e[2K\]'"$PS1"
     ;;
 
+ 3)
+    prompt_flushleft() { :;}
+    shopt -s checkwinsize       # sets COLUMNS
+    printf -v _MissingEOL '%-*ls' $(( COLUMNS < 512 ? 512 : COLUMNS )) '◀◁< missing EOL'
+    PS1='\[\e[1;7;31m${_MissingEOL:0:COLUMNS}\r\e[m\e[2K\]'"$PS1"
+    ;;
+
  *)
     _MissingEOL='◀◁< missing EOL'
     prompt_flushleft() {
