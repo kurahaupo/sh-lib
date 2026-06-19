@@ -1,7 +1,7 @@
 # Adjust the prompt so that it's always at the left margin, even when a
 # command's output does not finish with a newline.
 
-case 3 in
+case 4 in
  1)
     prompt_flushleft() { :;}
     shopt -s checkwinsize       # sets COLUMNS
