@@ -17,15 +17,24 @@ if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
     HISTSIZE=1000000
     HISTFILESIZE=1000000
     HISTTIMEFORMAT='%F,%T '
+
     hist_dir=${LOGHOME:-$HOME}/.bash_history.d
     hist_tmp=$HOME/tmp/hist.$$
-
     hist_tty=${TTY=$( tty )}
     hist_tty=${hist_tty#/dev/}
     hist_tty=${hist_tty//\//-}
     hist_tty=${hist_tty:-None}
+    hist_host=${HOSTNAME%%.*}
+    case $HOSTNAME in
+        @(ds|erx)*.@(chermside|cs|cmsd).sig.*)          hist_host=${HOSTNAME%%.*}-cs ;;
+        @(ds|erx)*.@(mtwel|mw).sig.*)                   hist_host=${HOSTNAME%%.*}-mw ;;
+        @(ds|erx)*.@(orakei|ok|mb|mbay).sig.*)          hist_host=${HOSTNAME%%.*}-ok ;;
+        @(ds|erx)*.@(orewa|ow).sig.*)                   hist_host=${HOSTNAME%%.*}-ow ;;
+        @(ds|erx)*.@(stonefields|sf|kohi|int).sig.*)    hist_host=${HOSTNAME%%.*}-sf ;;
+        @(ds|erx).*.sig.*)                              hist_host=${HOSTNAME%.sig.*} hist_host=${hist_host//./-} ;;
+    esac
 
-    HISTFILE=$hist_dir/$SECONDS.$hist_tty.${HOSTNAME%%.*}
+    HISTFILE=$hist_dir/$SECONDS.$hist_tty.$hist_host
 
     [[ -d $hist_dir ]] ||
     install -d -m1700 "$hist_dir"
