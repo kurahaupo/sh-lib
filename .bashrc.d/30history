@@ -63,4 +63,7 @@ if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
 
     # Make sure we save the history as we go...
     PROMPT_COMMAND+=$'\n history -a'
+
+    # Clear temp vars
+    unset "${!hist_@}"
 fi
