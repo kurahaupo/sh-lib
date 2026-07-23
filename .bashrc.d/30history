@@ -18,26 +18,26 @@ if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
     HISTFILESIZE=1000000
     HISTTIMEFORMAT='%F,%T '
 
-    hist_dir=${LOGHOME:-$HOME}/.bash_history.d
-    hist_tmp=$HOME/tmp/hist.$$
-    hist_tty=${TTY=$( tty )}
-    hist_tty=${hist_tty#/dev/}
-    hist_tty=${hist_tty//\//-}
-    hist_tty=${hist_tty:-None}
-    hist_host=${HOSTNAME%%.*}
+    _hist_dir=${LOGHOME:-$HOME}/.bash_history.d
+    _hist_tmp=$HOME/tmp/hist.$$
+    _hist_tty=${TTY=$( tty )}
+    _hist_tty=${_hist_tty#/dev/}
+    _hist_tty=${_hist_tty//\//-}
+    _hist_tty=${_hist_tty:-None}
+    _hist_host=${HOSTNAME%%.*}
     case $HOSTNAME in
-        @(ds|erx)*.@(chermside|cs|cmsd).sig.*)          hist_host=${HOSTNAME%%.*}-cs ;;
-        @(ds|erx)*.@(mtwel|mw).sig.*)                   hist_host=${HOSTNAME%%.*}-mw ;;
-        @(ds|erx)*.@(orakei|ok|mb|mbay).sig.*)          hist_host=${HOSTNAME%%.*}-ok ;;
-        @(ds|erx)*.@(orewa|ow).sig.*)                   hist_host=${HOSTNAME%%.*}-ow ;;
-        @(ds|erx)*.@(stonefields|sf|kohi|int).sig.*)    hist_host=${HOSTNAME%%.*}-sf ;;
-        @(ds|erx).*.sig.*)                              hist_host=${HOSTNAME%.sig.*} hist_host=${hist_host//./-} ;;
+        @(ds|erx)*.@(chermside|cs|cmsd).sig.*)          _hist_host=${HOSTNAME%%.*}-cs ;;
+        @(ds|erx)*.@(mtwel|mw).sig.*)                   _hist_host=${HOSTNAME%%.*}-mw ;;
+        @(ds|erx)*.@(orakei|ok|mb|mbay).sig.*)          _hist_host=${HOSTNAME%%.*}-ok ;;
+        @(ds|erx)*.@(orewa|ow).sig.*)                   _hist_host=${HOSTNAME%%.*}-ow ;;
+        @(ds|erx)*.@(stonefields|sf|kohi|int).sig.*)    _hist_host=${HOSTNAME%%.*}-sf ;;
+        @(ds|erx).*.sig.*)                              _hist_host=${HOSTNAME%.sig.*} _hist_host=${_hist_host//./-} ;;
     esac
 
-    HISTFILE=$hist_dir/$SECONDS.$hist_tty.$hist_host
+    HISTFILE=$_hist_dir/$SECONDS.$_hist_tty.$_hist_host
 
-    [[ -d $hist_dir ]] ||
-    install -d -m1700 "$hist_dir"
+    [[ -d $_hist_dir ]] ||
+    install -d -m1700 "$_hist_dir"
 
     # Save any current history to new HISTFILE, then clear all in-memory
     # history, and then read all history from the last 2 weeks back in.
@@ -47,23 +47,23 @@ if [[ ${LOGHOME:-$HOME} = "$HOME" ]] ; then
     # write a temporary file.
     # Filenames are in timestamp order (at least, by starting time)
     if [[ $USER != root ]] ; then
-        sudo chgrp -R "$USER" "$hist_dir"/1*        2> /dev/null
-        sudo chmod -R o=rw,g-wxs,o= "$hist_dir"/1*  2> /dev/null
-        sudo find "$hist_dir" -maxdepth 1 -name '1*' -type f \( -user "$USER" \(   -perm /040 -exec chmod -c g-r {} + , -true \) \
-                                                                           -o \( ! -perm /040 -exec chmod -c g+r {} +         \) \)
+        sudo chgrp -R "$USER" "$_hist_dir"/1*        2> /dev/null
+        sudo chmod -R o=rw,g-wxs,o= "$_hist_dir"/1*  2> /dev/null
+        sudo find "$_hist_dir" -maxdepth 1 -name '1*' -type f \( -user "$USER" \(   -perm /040 -exec chmod -c g-r {} + , -true \) \
+                                                                            -o \( ! -perm /040 -exec chmod -c g+r {} +         \) \)
     fi
-    hist_stx=$'\x02'    # separates timestamp from its event (history files are manually edited from time to time to ensure this)
-    find "$hist_dir" -maxdepth 1 -name '1*' -type f -mtime -15 -print0 |
+    _hist_stx=$'\x02'    # separates timestamp from its event (history files are manually edited from time to time to ensure this)
+    find "$_hist_dir" -maxdepth 1 -name '1*' -type f -mtime -15 -print0 |
      sort -z |
       xargs -r0 cat |
-       sed "/^#[[:digit:]]+$hist_stx/ s/$hist_stx/\n/g" > "$hist_tmp" &&
+       sed "/^#[[:digit:]]+$_hist_stx/ s/$_hist_stx/\n/g" > "$_hist_tmp" &&
     history -c &&
-    history -r "$hist_tmp" &&
-    rm -f "$hist_tmp"
+    history -r "$_hist_tmp" &&
+    rm -f "$_hist_tmp"
 
     # Make sure we save the history as we go...
     PROMPT_COMMAND+=$'\n history -a'
 
     # Clear temp vars
-    unset "${!hist_@}"
+    unset "${!_hist_@}"
 fi
