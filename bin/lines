@@ -1,0 +1,425 @@
+#!/bin/bash
+
+. "$HOME"/.sh-lib/require.bash die || exit
+
+shopt -s extglob
+
+declare -ir true=1 false=0
+declare -ir hidden=0 ascending=1 descending=-1
+declare -ir right_to_left=descending*2 left_to_right=ascending*2 \
+            bottom_to_top=descending*8 top_to_bottom=ascending*8 \
+            clockwise=ascending*16 anticlockwise=descending*16
+
+declare -i LINES start_line COLUMNS start_column
+
+cc='((red*6+green)*6+blue+16)'
+
+show_lines_left=hidden
+show_lines_right=bottom_to_top
+show_columns_top=hidden
+show_columns_bottom=right_to_left
+
+post_report=0
+clear_first=0
+
+buffering=0
+
+for ((;$#;)) do
+
+    # Non-directional options
+    case $1 in
+      (-c|--clear)                  clear_first=1 ;;
+      (--report)                    post_report=1 ;;
+
+      (--line=*)                    start_line=${1#*=}    ;;
+      (-l?*)                        start_line=${1#-?}    ;;
+      (-l|--line)                   start_line=$2 ; shift ;;
+
+      (--column=*)                  start_column=${1#*=}  ;;
+      (-c?*)                        start_column=${1#-?}  ;;
+      (--column)                    start_column=$2 ; shift ;;
+
+      (-B|--buffering)              buffering=1           ;;
+      (-B?*)                        buffering=${1#-?}     ;;
+      (--buffering=*)               buffering=${1#*=}     ;;
+      (-nB|--no-buffering)          buffering=0           ;;
+
+      (-h|--help)   cat <<EndOfHelp ; exit ;;
+$0
+    --hide
+    --clockwise
+    --anticlockwise
+    --ascending
+    --descending
+
+    -B --buffering
+    -bN --no-buffering
+
+EndOfHelp
+
+      ( * )  false
+    esac && { shift || break ; continue ; }
+
+    # Rewrite abbreviations
+    # Directions
+    case $1 in
+      ( --*=@(n?(o?(t|n|ne))|h?(i?(d?(d)?(e)?(n))))                                                       ) set --      ${1%=*}=0 "${@:2}" ;;   # [--*=not] --*=none [--*=hide] --*=hidden
+      (   --@(n?(o?(t|n|ne))|h?(i?(d?(d)?(e)?(n))))-*                                                     ) set --  --${1#--*-}=0 "${@:2}" ;;   #    --not-* [--none-*] --hide-* [--hidden-*]
+      (   --@(n?(o?(t|n|ne))|h?(i?(d?(d)?(e)?(n))))                                                       ) set --        --all=0 "${@:2}" ;;   #   [--not]   --none    --hide   [--hidden] (hide everything)
+
+      ( --*=@(o?(n)?(l)?(y))                                                                              ) set --      ${1%=*}=1 "${@:2}" ;;   # --*=only
+      (   --@(o?(n)?(l)?(y))-*                                                                            ) set --  --${1#--*-}=1 "${@:2}" ;;   #   --only-*
+      (   --@(o?(n)?(l)?(y))                                                                              ) set --        --all=1 "${@:2}" ;;   #   --only (ignored)
+
+      ( --[lrva]*=?(t?(o)?(p)?(?(-)@([2t]|to)?(-)))@(b?(o)?(t)?(t)?(o)?(m)|d?(o)?(w)?(n)?(w)?(a)?(r)?(d)) ) set --     ${1%%=*}=D "${@:2}" ;;
+      ( --[lrva]*=?(b?(o)?(t)?(t)?(o)?(m)?(?(-)@([2t]|to)?(-)))@(t?(o)?(p)|u?(p)?(w)?(a)?(r)?(d))         ) set --     ${1%%=*}=U "${@:2}" ;;
+      ( --[tbha]*=?(l?(e)?(f)?(t)?(?(-)@([2t]|to)?(-)))r?(i)?(g)?(h)?(t)?(w)?(a)?(r)?(d)                  ) set --     ${1%%=*}=R "${@:2}" ;;
+      ( --[tbha]*=?(r?(i)?(g)?(h)?(t)?(?(-)@([2t]|to)?(-)))l?(e)?(f)?(t)?(w)?(a)?(r)?(d)                  ) set --     ${1%%=*}=L "${@:2}" ;;
+
+      ( --?(t?(o)?(p)?(?(-)@([2t]|to)?(-)))@(b?(o)?(t)?(t)?(o)?(m)|d?(o)?(w)?(n)?(w)?(a)?(r)?(d))    | -D ) set --   --vertical=D "${@:2}" ;;
+      ( --?(b?(o)?(t)?(t)?(o)?(m)?(?(-)@([2t]|to)?(-)))@(t?(o)?(p)|u?(p)?(w)?(a)?(r)?(d))            | -U ) set --   --vertical=U "${@:2}" ;;
+      ( --?(l?(e)?(f)?(t)?(?(-)@([2t]|to)?(-)))r?(i)?(g)?(h)?(t)?(w)?(a)?(r)?(d)                     | -R ) set -- --horizontal=R "${@:2}" ;;
+      ( --?(r?(i)?(g)?(h)?(t)?(?(-)@([2t]|to)?(-)))l?(e)?(f)?(t)?(w)?(a)?(r)?(d)                     | -L ) set -- --horizontal=L "${@:2}" ;;
+
+      ( -[tblrhva]*=a?(n)?(t)?(i)?(?(-)c?(l)?(o)?(c)?(k)?(w)?(i)?(s)?(e))                                 ) set --     ${1%%=*}=A "${@:2}" ;;
+      ( -[tblrhva]*=c?(l)?(o)?(c)?(k)?(w)?(i)?(s)?(e)                                                     ) set --     ${1%%=*}=C "${@:2}" ;;
+
+      ( --a?(n)?(t)?(i)?(?(-)c?(l)?(o)?(c)?(k)?(w)?(i)?(s)?(e))                                      | -A ) set --        --all=A "${@:2}" ;;
+      ( --c?(l)?(o)?(c)?(k)?(w)?(i)?(s)?(e)                                                          | -C ) set --        --all=C "${@:2}" ;;
+
+      ( -[tblrhva]*=a?(s)?(c?(e)?(n)?(d?(ing)))                                                           ) set --     ${1%%=*}=+ "${@:2}" ;;
+      ( -[tblrhva]*=d?(e)?(s?(c)?(e)?(n)?(d?(ing)))                                                       ) set --     ${1%%=*}=- "${@:2}" ;;
+
+      ( --a?(s)?(c?(e)?(n)?(d?(ing)))                                                                     ) set --        --all=+ "${@:2}" ;;
+      ( --d?(e)?(s?(c)?(e)?(n)?(d?(ing)))                                                                 ) set --        --all=- "${@:2}" ;;
+
+      ( --*=* ) die EX_USAGE "Invalid direction '${1#*=}' in '$1'"
+    esac
+
+    # Segments
+    case $1 in
+      ( --t?(o)?(p)=* )                                 set -- T${1#*=} "${@:2}" ;;
+      ( --b?(o)?(t)?(t)?(o)?(m)=* )                     set -- B${1#*=} "${@:2}" ;;
+      ( --l?(e)?(f)?(t)=* )                             set -- L${1#*=} "${@:2}" ;;
+      ( --r?(i)?(g)?(h)?(t)=* )                         set -- R${1#*=} "${@:2}" ;;
+
+      ( --h?(o)?(r)?(i)?(z)?(o)?(n)?(t)?(a)?(l)=* )     set -- H${1#*=} "${@:2}" ;;
+      ( --v?(e)?(r)?(t)?(i)?(c)?(a)?(l)=* )             set -- V${1#*=} "${@:2}" ;;
+
+      ( --a?(l|ll)=* )                                  set -- A${1#*=} "${@:2}" ;;
+
+      ( --*=* ) die EX_USAGE "Invalid segment '${1%%=*}' in '$1'" ;;
+    esac
+
+    # Short forms
+    case $1 in
+
+        ( -[ahvlrtb]h )                 set -- "${1:1:1}" "${@:2}" ; set -- "${1^}0" "${@:2}" ;;
+        ( -[ahvlrtb]o )                 set -- "${1:1:1}" "${@:2}" ; set -- "${1^}1" "${@:2}" ;;
+
+        ( -[htb][aclr] | -[vlr][acud] ) set -- "${1:1:2}" "${@:2}" ; set -- "${1^^}" "${@:2}" ;;
+
+        ( -* )  die EX_USAGE "Invalid option '$1'" ;;
+    esac
+
+    case $1 in
+
+#   # Turning segments off...
+      ( [BLRV]1 | [THA]0 )  show_columns_top=hidden             ;;&
+      ( [TLRV]1 | [BHA]0 )  show_columns_bottom=hidden          ;;&
+      ( [TBRH]1 | [LVA]0 )  show_lines_left=hidden              ;;&
+      ( [TBLH]1 | [RVA]0 )  show_lines_right=hidden             ;;&
+
+#   # Turning on vertical segments
+      ( [THA][+CR] )        show_columns_top=left_to_right      ;;&
+      ( [THA][-AL] )        show_columns_top=right_to_left      ;;&
+      ( [BHA][+AR] )        show_columns_bottom=left_to_right   ;;&
+      ( [BHA][-CL] )        show_columns_bottom=right_to_left   ;;&
+
+#   # Turning on horizontal segments
+      ( [LVA][+AD] )        show_lines_left=top_to_bottom       ;;&
+      ( [LVA][-CU] )        show_lines_left=bottom_to_top       ;;&
+      ( [RVA][+CD] )        show_lines_right=top_to_bottom      ;;&
+      ( [RVA][-AU] )        show_lines_right=bottom_to_top      ;;&
+
+      ( [TBRLHVA][01] | [TBHA][-+CALR] | [LRVA][-+CAUD] ) ;;
+      ( * ) die EX_USAGE "Invalid directive '$1'" ;;
+
+    esac
+    shift
+done
+
+((start_line))   || { start_line=10#0$1   ; shift ; }
+((start_line))   || {
+    ((LINES)) || LINES=$( tput lines )
+    ((LINES)) || LINES=160
+    start_line=LINES*9/8+2
+}
+
+((start_column)) || { start_column=10#0$1 ; shift ; }
+((start_column)) || {
+    ((COLUMNS)) || COLUMNS=$( tput cols )
+    ((COLUMNS)) || COLUMNS=255
+    start_column=COLUMNS*9/8+2
+}
+
+if ((buffering)) ; then
+    _output_buffer=
+    __printf_count=0
+    __prints_count=0
+    printf%s() {
+        ((++__prints_count))
+        _output_buffer+="$*"
+    }
+    printf() {
+        ((++__printf_count))
+        local x
+        builtin printf -v x "$@"
+        local r=$?
+        _output_buffer+=$x
+        return $r
+    }
+    bflush() {
+        (( ${#_output_buffer} >= buffering )) || return 0
+        builtin printf %s "$_output_buffer"
+        local r=$?
+        _output_buffer=
+        return $r
+    }
+    endbuf() {
+        printf%s() { printf %s "$*" ; }
+        unset -f printf         # revert to builtin
+        endbuf() { bflush ; }   # don't repeat this function
+        bflush
+    }
+    trap endbuf EXIT
+    trap endbuf INT
+else
+    __printf_count='(not counted)'
+    __prints_count='(not counted)'
+    bflush() { :;}
+    endbuf() { :;}
+    printf%s() { printf %s "$*" ; }
+fi
+
+# Cursor movement
+__cm_count=0
+cm() {
+    ((++__cm_count))
+    local _dir=$1 _odir=$1 __param
+    local -ai __counts=( "${@:2}" )
+    # A "zero movement" cannot be expressed as an ANSI escape sequence,
+    # so do it conditionally.
+    local -i _gargs=$#-1 _nargs=-1  # gotten args, needed args
+    case $_dir in
+      # Relative positions
+      A|up)             _dir=A _nargs=1 ; (( __counts[0] > 0 )) || return ;;
+      B|down)           _dir=B _nargs=1 ; (( __counts[0] > 0 )) || return ;;
+      C|right)          _dir=C _nargs=1 ; (( __counts[0] > 0 )) || return ;;
+      D|left)           _dir=D _nargs=1 ; (( __counts[0] > 0 )) || return ;;
+      G|column)         _dir=G _nargs=1 ;;
+      I|tabstop)        _dir=I _nargs=1 ;;
+
+      # Semi-absolute
+#     left_margin)              _nargs=0 ; printf%s $'\r' ; return ;;
+      left_margin)      _dir=G _nargs=0 __counts=( 1 ) ;;
+      right_margin)     _dir=G _nargs=0 __counts=( 9999 ) ;;
+      top_margin)       _dir=A _nargs=0 __counts=( 9999 ) ;;
+      bottom_margin)    _dir=B _nargs=0 __counts=( 9999 ) ;;
+
+      # Absolution positions
+      H|row_column)     _dir=H _nargs=2 ;;
+      top_left)         _dir=H _nargs=0 __counts=()            ;;
+      top_right)        _dir=H _nargs=0 __counts=(    1 9999 ) ;;
+      bottom_left)      _dir=H _nargs=0 __counts=( 9999 ) ;;
+      bottom_right)     _dir=H _nargs=0 __counts=( 9999 9999 ) ;;
+      right_edge)       _dir=G _nargs=0 __counts=( 9999 ) ;;
+      *)                die EX_SOFTWARE 'Invalid direction "%s"\n' "$_dir" ;;
+    esac
+    (( _gargs >= _nargs )) || die EX_SOFTWARE "Too few  args for 'cm $_odir': expected $_nargs but got $_gargs"
+    (( _gargs <= _nargs )) || die EX_SOFTWARE "Too many args for 'cm $_odir': expected $_nargs but got $_gargs"
+    IFS=';' eval "__param=\"\${__counts[*]}\""
+    if ((debug))
+    then printf '\n%s\t\\e[%s%.1s\n' "cm($*)" "$__param" "$_dir"
+    else printf%s $'\e['"$__param${_dir:0:1}"
+    fi
+}
+
+#printf%s $'\e[7m'
+
+if ((clear_first)) ; then
+    printf%s $'\e[2J'
+fi
+
+colour_top=$'\e[48;5;54;39m'
+colour_bottom=$'\e[48;5;19;39m'
+colour_left=$'\e[48;5;159;30m'
+colour_right=$'\e[48;5;160m'
+
+# Pre-load the 3 low-order parts
+
+if (( show_columns_top )) ; then
+    cm top_left
+    printf '%s\e[K\n\e[K\n\e[K' "$colour_top"
+fi
+
+if (( show_columns_bottom )) ; then
+    cm bottom_left
+    cm up 3
+    printf '%s\e[K\n\e[K\n\e[K' "$colour_bottom"
+fi
+
+if (( show_lines_left > 0 || show_lines_right > 0 )) ; then
+    cm top_left
+    for ((line=1;;)) do
+        if (( show_lines_left > 0 )) ; then
+            printf '%s%-3u' "$colour_left" "$line"
+        fi
+        if (( show_lines_right > 0 )) ; then
+            cm right_edge
+            cm left 2
+            printf '%s%3u' "$colour_right" "$line"
+        fi
+        ((++line<=3)) || break
+        printf '\n'
+    done
+fi
+
+if (( show_lines_left < 0 || show_lines_right < 0 )) ; then
+    cm bottom_left
+    cm up 2
+    for ((line=3;;)) do
+        if (( show_lines_left < 0 )) ; then
+            printf '%s%-3u' "$colour_left" "$line"
+        fi
+        if (( show_lines_right < 0 )) ; then
+            cm right_edge
+            cm left 2
+            printf '%s%3u' "$colour_right" "$line"
+        fi
+        ((--line>0)) || break
+        printf '\n'
+    done
+fi
+
+if (( show_columns_top )) ; then
+    printf%s "$colour_top"
+    if (( show_columns_top > 0 )) ; then
+        cm top_left
+        printf%s 123
+    else
+        cm top_right
+        cm left 2
+        printf%s 321
+    fi
+fi
+
+if (( show_columns_bottom )) ; then
+    printf%s "$colour_bottom"
+    if (( show_columns_bottom > 0 )) ; then
+        cm bottom_left
+        cm up 1
+        printf%s 123
+    else
+        cm bottom_right
+        cm up 1
+        cm left 2
+        printf%s 321
+    fi
+fi
+
+###########################
+
+if (( show_columns_top )) ; then
+    printf%s "$colour_top"
+    if (( show_columns_top > 0 )) ; then
+        for (( column = start_column ; column > 3 ; --column )) do
+            for ((l=1, c=column;c; c/=10, ++l)) do
+                cm row_column "$l" "$column"
+                printf%s "$((c%10))"
+            done
+        done
+    else
+        for (( column = start_column ; column > 3 ; --column )) do
+            for ((l=1, c=column;c; c/=10, ++l)) do
+                cm row_column "$l" 9999
+                cm left "$((column-1))"
+                printf%s "$((c%10))"
+            done
+        done
+    fi
+fi
+
+if (( show_lines_left )) ; then
+    printf%s "$colour_left"
+    if (( show_lines_left < 0 )) ; then
+        for (( line=start_line ; line > 3 ; --line )) do
+            cm bottom_left
+            cm up $((line-1))
+            printf %-3u "$line"
+        done
+
+    else
+        for (( line=start_line ; line > 3 ; --line )) do
+            cm row_column "$line" 1
+            printf %-3u "$line"
+        done
+    fi
+fi
+
+if (( show_lines_right )) ; then
+    printf %s "$colour_right"
+    if (( show_lines_right < 0 )) ; then
+        for (( line=start_line ; line > 3 ; --line )) do
+            cm bottom_right
+            cm up $((line-1))
+            cm left 2
+            printf %3u "$line"
+        done
+
+    else
+        for (( line=start_line ; line > 3 ; --line )) do
+            cm row_column "$line" 9999
+            cm left 2
+            printf %3u "$line"
+        done
+    fi
+fi
+
+if (( show_columns_bottom )) ; then
+    printf%s "$colour_bottom"
+    if (( show_columns_bottom < 0 )) ; then
+        for (( column = start_column ; column > 3 ; --column )) do
+            for ((l=1, c=column ; c ; c/=10, ++l)) do
+                cm bottom_right
+                cm left $((column-1))
+                cm up "$l"
+                printf%s $((c%10))
+            done
+        done
+
+    else
+        for (( column = start_column ; column > 3 ; --column )) do
+            for ((l=1, c=column ; c ; c/=10, ++l)) do
+                cm row_column 9999 "$column"
+                cm up "$l"
+                printf%s $((c%10))
+            done
+        done
+    fi
+fi
+
+cm bottom_left
+cm up 5
+cm right 16
+
+bflush
+printf%s $'\e[39;49;0m'
+
+endbuf
+
+if ((post_report)) ; then
+    builtin printf >&2 '\e[7m\e[9999;16H\e[5Aleft=%s, right=%s, top=%s, bottom=%s, cm_count=%s, pf_count=%s, pp_count=%s\e[27m' $show_lines_left $show_lines_right $show_columns_top $show_columns_bottom $__cm_count "$__printf_count" "$__prints_count"
+fi
+
+builtin printf >&2 '\e[0m\e[9999;1H'
