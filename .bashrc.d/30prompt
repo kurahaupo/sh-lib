@@ -113,7 +113,7 @@ PS1+='\!'
 PS1+=$PS_eprompt
 PS1+='\$ '
 
-unset PS_depth PS_eblink PS_ecolour PS_edim PS_sblink PS_scolour PS_sdim
+unset PS_depth PS_eblink PS_edim PS_eprompt PS_sblink PS_sdim PS_sprompt
 
 # When building & testing new versions of Bash, put the version in the prompt
 case $BASH in
@@ -138,6 +138,7 @@ then
     PS_status+=' [\l] \!'   # ${TTY##*/}
     PS_status+=' \D{%F,%T}' # $( date +%F,%T )
     PS_status+='${WINDOWNAME:+ [$WINDOWNAME]}'
+    PS_status+='${VYATTA_EDIT_LEVEL:+(*EDIT $VYATTA_EDIT_LEVEL) }'
     PS_status+='${debian_chroot:+ (@$debian_chroot)}'
     PS_status+='${SSH_CLIENT:+ from ${SSH_CLIENT%%\ *}}'
     PS_status+="$PS_close"
