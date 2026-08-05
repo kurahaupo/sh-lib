@@ -65,6 +65,7 @@ ip() {
             fi
         fi
     fi
+    COLORFGBG=\;0 \
     command ip "$@"
 }
 _provides ip

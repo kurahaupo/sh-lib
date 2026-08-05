@@ -1,2 +1,3 @@
 #!/bin/sh
+COLORFGBG=\;0 \
 exec sudo ip -o "$@"
