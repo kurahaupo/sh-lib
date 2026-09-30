@@ -22,13 +22,13 @@ show_columns_bottom=right_to_left
 post_report=0
 clear_first=0
 
-buffering=0
+buffering=1
 
 for ((;$#;)) do
 
     # Non-directional options
     case $1 in
-      (-c|--clear)                  clear_first=1 ;;
+      (-c|--cl?(?(e)?(a)r))         clear_first=1 ;;
       (--report)                    post_report=1 ;;
 
       (--line=*)                    start_line=${1#*=}    ;;
